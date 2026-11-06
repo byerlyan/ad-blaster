@@ -16,7 +16,7 @@ import config
 logger = logging.getLogger(__name__)
 
 
-def _find_capture_card_index(expected_name: str = config.CAPTURE_DEVICE_NAME) -> int | None:
+def _find_capture_card_index(expected_name: str | None = None) -> int | None:
     """Find the OpenCV index for a capture device by its AVFoundation name.
 
     Replicates OpenCV's cap_avfoundation_mac.mm device enumeration:
@@ -24,6 +24,11 @@ def _find_capture_card_index(expected_name: str = config.CAPTURE_DEVICE_NAME) ->
     Uses AVCaptureDeviceDiscoverySession (required on modern macOS to
     find external USB devices).
     """
+    if expected_name is None:
+        # Resolve this at call time so a device selected in the dashboard takes
+        # effect without requiring the Python process to restart.
+        expected_name = config.CAPTURE_DEVICE_NAME
+
     try:
         from AVFoundation import (
             AVCaptureDeviceDiscoverySession,
@@ -78,8 +83,9 @@ def _find_capture_card_index(expected_name: str = config.CAPTURE_DEVICE_NAME) ->
 class FrameCapture:
     """Manages the OpenCV VideoCapture device."""
 
-    def __init__(self, device=config.CAPTURE_DEVICE):
-        self._device = device
+    def __init__(self, device=None):
+        # CAPTURE_DEVICE can be updated by the setup wizard at runtime.
+        self._device = config.CAPTURE_DEVICE if device is None else device
         self._cap = None
 
     def open(self):

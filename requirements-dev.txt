@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Test-only dependencies. Starlette's current TestClient uses the httpx2
+# package; keeping it here avoids adding HTTP client code to production.
+pytest>=9.0
+httpx2>=2.16

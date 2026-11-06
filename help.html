@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#d4714a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/clicker-icon.svg" type="image/svg+xml">
+<title>Help — The Clicker</title>
+<style>
+:root {
+  --bg:#17140f;
+  --surface:#211e19;
+  --surface2:#2a2620;
+  --border:#3a3530;
+  --text:#ebe1d2;
+  --text2:#b5aa9a;
+  --text3:#81776b;
+  --accent:#d4714a;
+  --accent-dim:rgba(212,113,74,.15);
+  --green:#9abe98;
+  --green-dim:rgba(139,173,138,.14);
+  --yellow:#d4b870;
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0;
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a { color:var(--green); }
+a:hover { color:var(--text); }
+.skip-link { position:fixed; top:8px; left:8px; z-index:20; transform:translateY(-150%); padding:8px 12px; border-radius:6px; background:var(--accent); color:#17140f; font-weight:700; }
+.skip-link:focus { transform:none; }
+.topbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px max(20px,calc((100vw - 1120px)/2)); border-bottom:1px solid var(--border); background:rgba(33,30,25,.96); backdrop-filter:blur(12px); }
+.brand { color:var(--text); font-size:1.05rem; font-weight:700; text-decoration:none; }
+.top-actions { display:flex; align-items:center; gap:8px; }
+.top-actions a { padding:7px 12px; border:1px solid transparent; border-radius:6px; color:var(--text2); font-size:.83rem; font-weight:650; text-decoration:none; }
+.top-actions a:hover, .top-actions a[aria-current="page"] { border-color:var(--border); background:var(--surface2); color:var(--text); }
+.layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:42px; width:min(1120px,calc(100% - 40px)); margin:0 auto; padding:38px 0 80px; }
+.toc { position:sticky; top:88px; align-self:start; }
+.toc-label { margin:0 0 10px; color:var(--text3); font-size:.68rem; font-weight:750; letter-spacing:.09em; text-transform:uppercase; }
+.toc a { display:block; margin:2px 0; padding:7px 10px; border-left:2px solid var(--border); color:var(--text3); font-size:.82rem; text-decoration:none; }
+.toc a:hover { border-color:var(--accent); color:var(--text); }
+main { min-width:0; }
+.eyebrow { margin:0 0 8px; color:var(--accent); font-size:.72rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+h1,h2,h3 { line-height:1.15; letter-spacing:-.025em; }
+h1 { max-width:760px; margin:0; font-size:clamp(2.1rem,5vw,4rem); }
+.lede { max-width:760px; margin:18px 0 0; color:var(--text2); font-size:clamp(1rem,2vw,1.18rem); }
+.hero-note { display:flex; gap:12px; margin:28px 0 0; padding:16px 18px; border:1px solid rgba(212,184,112,.4); border-radius:10px; background:rgba(212,184,112,.08); color:var(--text2); }
+.hero-note strong { color:var(--yellow); }
+section { scroll-margin-top:88px; margin-top:64px; }
+section > h2 { margin:0 0 10px; font-size:clamp(1.55rem,3vw,2.15rem); }
+.section-intro { max-width:720px; margin:0 0 24px; color:var(--text2); }
+.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.card { padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+.card h3 { margin:0 0 8px; font-size:1.03rem; }
+.card p { margin:0; color:var(--text2); font-size:.92rem; }
+.card p + p { margin-top:10px; }
+.step { display:grid; grid-template-columns:34px minmax(0,1fr); gap:12px; }
+.step-number { display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:var(--accent-dim); color:var(--accent); font-size:.78rem; font-weight:800; }
+.step h3 { margin-top:4px; }
+.callout { margin:22px 0; padding:18px 20px; border-left:3px solid var(--green); background:var(--green-dim); color:var(--text2); }
+.callout strong { color:var(--green); }
+.checklist { margin:0; padding-left:1.25rem; color:var(--text2); }
+.checklist li { margin:7px 0; padding-left:4px; }
+.checklist strong { color:var(--text); }
+.mode-table { width:100%; border-collapse:collapse; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--surface); font-size:.9rem; }
+.mode-table th,.mode-table td { padding:13px 16px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+.mode-table th { color:var(--text); font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; }
+.mode-table td { color:var(--text2); }
+.mode-table tr:last-child td { border-bottom:0; }
+.mode-table td:first-child { color:var(--text); font-weight:700; white-space:nowrap; }
+.code-block { position:relative; margin:14px 0; overflow:auto; border:1px solid var(--border); border-radius:8px; background:#100e0b; }
+pre { margin:0; padding:16px; color:#d9cfc0; font:500 .82rem/1.65 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; white-space:pre; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--surface2); color:var(--text); font-size:.84em; }
+.label { display:inline-block; margin-bottom:8px; padding:3px 8px; border-radius:4px; background:var(--accent-dim); color:var(--accent); font-size:.68rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.faq details { border-top:1px solid var(--border); }
+.faq details:last-child { border-bottom:1px solid var(--border); }
+.faq summary { cursor:pointer; padding:16px 4px; color:var(--text); font-weight:700; }
+.faq details p { margin:0 4px 18px; color:var(--text2); }
+.footer { margin-top:64px; padding-top:22px; border-top:1px solid var(--border); color:var(--text3); font-size:.8rem; }
+@media (max-width:800px) {
+  .layout { grid-template-columns:1fr; gap:0; }
+  .toc { position:static; display:flex; gap:4px; margin-bottom:34px; overflow-x:auto; padding-bottom:8px; }
+  .toc-label { display:none; }
+  .toc a { flex:0 0 auto; border:1px solid var(--border); border-radius:999px; padding:6px 11px; }
+  .grid { grid-template-columns:1fr; }
+}
+@media (max-width:540px) {
+  .topbar { padding:11px 14px; }
+  .top-actions a:not([aria-current="page"]) { display:none; }
+  .layout { width:min(100% - 28px,1120px); padding-top:24px; }
+  section { margin-top:48px; }
+  .mode-table { display:block; overflow-x:auto; }
+  .card { padding:17px; }
+}
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+</style>
+</head>
+<body data-help-page>
+<a class="skip-link" href="#content">Skip to help</a>
+<header class="topbar">
+  <a class="brand" href="/">The Clicker</a>
+  <nav class="top-actions" aria-label="Help navigation">
+    <a href="/">Dashboard</a>
+    <a href="/help" aria-current="page">Help</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="On this page">
+    <p class="toc-label">On this page</p>
+    <a href="#quick-start">Quick start</a>
+    <a href="#legacy">Legacy system</a>
+    <a href="#training">Train the model</a>
+    <a href="#fingerprints">Trusted ads</a>
+    <a href="#ad-overlays">Ad overlays</a>
+    <a href="#evaluation">Evaluate safely</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <main id="content">
+    <p class="eyebrow">Setup &amp; training guide</p>
+    <h1>Start with a reliable baseline. Teach Hybrid what your TV looks like.</h1>
+    <p class="lede">The Legacy detector is the dependable starting point. Once it recognizes your channel consistently, collect real labels, train the optional classifier, and compare Hybrid in Shadow mode before allowing automatic muting.</p>
+    <div class="hero-note" role="note">
+      <span aria-hidden="true">⚠</span>
+      <div><strong>Keep automatic muting off while tuning.</strong> Shadow mode runs detection and records decisions without controlling Apple TV volume.</div>
+    </div>
+
+    <section id="quick-start">
+      <p class="eyebrow">Recommended path</p>
+      <h2>From first setup to live control</h2>
+      <p class="section-intro">Work through these steps in order. A clean Legacy baseline makes both your training data and Hybrid results easier to trust.</p>
+      <div class="grid">
+        <article class="card step"><span class="step-number">1</span><div><h3>Finish the wizard</h3><p>Select the capture card, pair Companion and AirPlay with Apple TV, and confirm a live frame is available.</p></div></article>
+        <article class="card step"><span class="step-number">2</span><div><h3>Calibrate during programming</h3><p>Create or select a profile while the channel logo and ordinary program content are visible. Do not calibrate during a commercial.</p></div></article>
+        <article class="card step"><span class="step-number">3</span><div><h3>Run Legacy in Shadow</h3><p>Choose <strong>Legacy</strong>, leave automatic muting off, enable <strong>Start in shadow mode</strong>, then watch at least one complete commercial break.</p></div></article>
+        <article class="card step"><span class="step-number">4</span><div><h3>Correct and label</h3><p>Use Activity to review transitions. In Settings, mark representative Content and Commercial windows across multiple viewing sessions.</p></div></article>
+        <article class="card step"><span class="step-number">5</span><div><h3>Train and compare Hybrid</h3><p>Export the labeled features, train the local model, enable the ML Classifier, and run Hybrid in Shadow mode.</p></div></article>
+        <article class="card step"><span class="step-number">6</span><div><h3>Enable control conservatively</h3><p>Only after Shadow results look correct, enable automatic muting. Start with the Conservative sensitivity preset.</p></div></article>
+      </div>
+    </section>
+
+    <section id="legacy">
+      <p class="eyebrow">Stable baseline</p>
+      <h2>Using the Legacy system</h2>
+      <p class="section-intro">Legacy detects commercial breaks from the calibrated visual signal—logo, color, or their combination—and adds debounce, recovery hysteresis, cooldown, and maximum-break safeguards.</p>
+      <div class="callout"><strong>Legacy remains useful after you train ML.</strong> It works without an audio input or model file, and it is the quickest way to diagnose capture, calibration, and profile problems.</div>
+      <table class="mode-table">
+        <thead><tr><th>Profile</th><th>Use it when</th><th>What to watch</th></tr></thead>
+        <tbody>
+          <tr><td>Logo</td><td>The channel bug is stable during programming and disappears during ads.</td><td>Score overlays, animated logos, and feeds where the logo remains during commercials.</td></tr>
+          <tr><td>Color</td><td>The selected region has a consistent program palette.</td><td>Scene changes or graphics that resemble the commercial palette.</td></tr>
+          <tr><td>Combo</td><td>You want logo and palette evidence to agree.</td><td>Usually safer, but needs both references to be calibrated well.</td></tr>
+        </tbody>
+      </table>
+      <h3>Recommended Legacy check</h3>
+      <ol class="checklist">
+        <li>Open <strong>Calibration</strong>, select the channel profile, and verify Current resembles Template while programming is on.</li>
+        <li>Open <strong>Settings</strong>, set Detection mode to <strong>Legacy</strong>, automatic muting off, and Start in shadow mode on.</li>
+        <li>On <strong>Home</strong>, start the engine and watch the fused status through a program-to-commercial-to-program cycle.</li>
+        <li>If it enters too easily, use <strong>Conservative</strong> or increase debounce. If it misses too much, try Balanced before changing individual thresholds.</li>
+        <li>Use <strong>Disarm</strong> immediately if a live session controls volume incorrectly; this also starts the manual-override cooldown.</li>
+      </ol>
+    </section>
+
+    <section id="training">
+      <p class="eyebrow">Local classifier</p>
+      <h2>Training the model</h2>
+      <p class="section-intro">The Clicker stores feature rows—not video—as you label. Training uses a small calibrated logistic-regression model designed to run locally on older hardware.</p>
+      <div class="grid">
+        <article class="card"><span class="label">Good data</span><h3>Collect varied sessions</h3><p>Gather both Content and Commercial examples from different programs, channels, times, lighting/graphics conditions, and commercial breaks. Use at least four distinct marking sessions or sources.</p></article>
+        <article class="card"><span class="label">Avoid leakage</span><h3>Do not label one long adjacent run</h3><p>Adjacent frames are very similar. Start and stop several separate marking windows so training, calibration, and test groups can remain independent.</p></article>
+      </div>
+      <h3>1. Record labels in the dashboard</h3>
+      <ol class="checklist">
+        <li>Run the engine in Shadow mode with the correct channel profile.</li>
+        <li>Open <strong>Settings → Tune Thresholds</strong>.</li>
+        <li>During ordinary programming, select <strong>Mark Content</strong>; stop before a transition.</li>
+        <li>During a confirmed ad, select <strong>Mark Commercial</strong>; stop before programming returns.</li>
+        <li>Repeat in several separate sessions. The first and last second of each window are automatically trimmed.</li>
+      </ol>
+      <h3>2. Install the optional training tools</h3>
+      <p>From the project or installed application directory:</p>
+      <div class="code-block"><pre><code>python3 -m pip install -r requirements-ml.txt</code></pre></div>
+      <h3>3. Export and train</h3>
+      <p>You can download the raw CSV from <strong>Home → Training &amp; Trusted Ads</strong>, or run both commands locally:</p>
+      <div class="code-block"><pre><code>python3 scripts/export_feature_dataset.py --output data/features.csv
+
+python3 scripts/train_commercial_model.py \
+  --dataset data/features.csv \
+  --output data/commercial_model.joblib</code></pre></div>
+      <p>The trainer requires both labels and enough distinct source/session groups to separate fitting, calibration, and testing. The saved artifact includes its schema, dataset digest, group assignments, precision, and recall.</p>
+      <h3>4. Turn on the trained classifier</h3>
+      <ol class="checklist">
+        <li>Restart the service so it loads <code>data/commercial_model.joblib</code>.</li>
+        <li>Open <strong>Settings → Advanced → Hybrid subsystems</strong>.</li>
+        <li>Enable <strong>ML Classifier</strong>, save settings, and set Detection mode to <strong>Hybrid</strong>.</li>
+        <li>Keep automatic muting off and compare at least several complete breaks in Shadow mode.</li>
+      </ol>
+      <div class="callout"><strong>No model is bundled.</strong> If the file is missing, corrupt, or built with an incompatible feature schema, ML safely reports unknown and does not make a commercial decision.</div>
+    </section>
+
+    <section id="fingerprints">
+      <p class="eyebrow">Repeated advertisements</p>
+      <h2>Enrolling trusted ads</h2>
+      <p class="section-intro">Audio fingerprints help recognize a commercial you have already confirmed. They are separate from ML training and are never enrolled automatically.</p>
+      <ol class="checklist">
+        <li>Enable <strong>Audio Fingerprints</strong> under Settings → Advanced, and make sure Hybrid Diagnostics reports audio available.</li>
+        <li>While a confirmed commercial is playing, open <strong>Home → Training &amp; Trusted Ads</strong>.</li>
+        <li>Enter a useful ad name, choose a recent-audio duration—10 seconds is a sensible start—and select <strong>Enroll recent audio</strong>.</li>
+        <li>Remove an enrollment if it matches programming or produces misleading results.</li>
+      </ol>
+      <p>Only compact spectral tokens and metadata are stored in the local SQLite database; raw PCM audio is not written to disk.</p>
+    </section>
+
+    <section id="ad-overlays">
+      <p class="eyebrow">Player-provided evidence</p>
+      <h2>Flagging ad labels and countdowns</h2>
+      <p class="section-intro">Hybrid can read player UI such as <strong>Ad 1 of 2</strong>, <strong>Advertisement 0:15</strong>, <strong>Commercial break</strong>, and <strong>Skip ad</strong>. Enable <strong>Ad labels &amp; countdowns</strong> under Settings → Advanced.</p>
+      <div class="grid">
+        <article class="card"><h3>Repeated confirmation</h3><p>The label must be recognized in consecutive OCR scans. A short hold prevents one missed frame or a changing digit from dropping the flag immediately.</p></article>
+        <article class="card"><h3>Corroboration required</h3><p>The overlay supports logo, audio, fingerprint, or ML evidence. It cannot start a commercial classification by itself.</p></article>
+      </div>
+      <div class="callout"><strong>A timer alone is ignored.</strong> Sports clocks, news countdowns, and game-show timers are common. “Sponsored” alone is also only diagnostic and never an ad classification.</div>
+      <p>When the detector recognizes an overlay, <strong>Home → Hybrid Diagnostics</strong> shows the OCR text and remaining seconds. Run in Shadow mode first and confirm your service renders a stable explicit ad label.</p>
+    </section>
+
+    <section id="evaluation">
+      <p class="eyebrow">Before live muting</p>
+      <h2>Evaluate the result safely</h2>
+      <p class="section-intro">The most important failure is muting programming. Compare modes on captured, labeled viewing rather than judging a model by overall accuracy alone.</p>
+      <div class="grid">
+        <article class="card"><h3>Prefer precision</h3><p>Review false-muted programming seconds per hour, especially around sports restarts, news graphics, and channel transitions.</p></article>
+        <article class="card"><h3>Then improve coverage</h3><p>Review commercial audio muted percentage and enter/exit latency. More aggressive thresholds can improve coverage at the cost of program safety.</p></article>
+      </div>
+      <p>For a prepared <code>timestamp,label,legacy,hybrid</code> CSV:</p>
+      <div class="code-block"><pre><code>python3 scripts/evaluate_detection.py \
+  --input evaluation.csv \
+  --data-kind captured</code></pre></div>
+      <p>When Hybrid performs worse than Legacy, keep using Legacy. More representative labels or a corrected calibration usually help more than simply lowering the commercial threshold.</p>
+    </section>
+
+    <section id="troubleshooting" class="faq">
+      <p class="eyebrow">Common problems</p>
+      <h2>Troubleshooting</h2>
+      <details><summary>Legacy marks programming as a commercial</summary><p>Confirm the active profile matches the current channel, recalibrate during stable programming, and try Conservative sensitivity. Inspect the Current and Template images for crop or logo changes.</p></details>
+      <details><summary>The model stays unavailable or unknown</summary><p>Confirm <code>data/commercial_model.joblib</code> exists, restart the service, enable ML Classifier, and inspect Diagnostics for a schema or load error. Unknown is the expected safe state when a model cannot be used.</p></details>
+      <details><summary>The trainer says there are not enough groups</summary><p>Record more separate Content and Commercial marking windows. You need both labels and at least four distinct session/source groups; many adjacent rows from one window still count as one group.</p></details>
+      <details><summary>Hybrid has no audio evidence</summary><p>Use Diagnostics to verify the configured audio input. On macOS, a capture card may expose video under one device name and audio under another. Legacy visual detection can continue without audio.</p></details>
+      <details><summary>Ad overlay OCR is unavailable</summary><p>Install Tesseract, restart The Clicker, and verify <code>tesseract --version</code> works. The macOS and Debian deployment scripts install it automatically.</p></details>
+      <details><summary>Automatic muting made a bad decision</summary><p>Select Disarm, turn automatic muting off, and return to Shadow mode. Review the active profile and Activity reason before changing thresholds or adding more training data.</p></details>
+    </section>
+
+    <footer class="footer">The Clicker runs its detector, training data, model, and trusted fingerprints locally.</footer>
+  </main>
+</div>
+</body>
+</html>

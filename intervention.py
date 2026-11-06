@@ -119,8 +119,11 @@ class PlaybackController(ABC):
 class AppleTVController(PlaybackController):
     """Async wrapper around pyatv for controlling the Apple TV."""
 
-    def __init__(self, device_id: str = config.APPLE_TV_ID):
-        self._device_id = device_id
+    def __init__(self, device_id: str | None = None):
+        # Resolve the configured identifier at construction time. Dashboard
+        # pairing loads persisted settings after module import, so a definition-
+        # time default would retain the placeholder ID until process restart.
+        self._device_id = config.APPLE_TV_ID if device_id is None else device_id
         self._atv = None
         self._remote = None
         self._audio = None

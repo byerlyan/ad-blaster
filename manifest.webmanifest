@@ -1,0 +1,24 @@
+{
+  "name": "The Clicker",
+  "short_name": "Clicker",
+  "description": "Local commercial detection and TV control dashboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#17130f",
+  "theme_color": "#d4714a",
+  "icons": [
+    {
+      "src": "/clicker-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/clicker-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

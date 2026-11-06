@@ -5,31 +5,182 @@ import base64
 import json
 import logging
 import os
+import pathlib
+import platform
+import socket
+import sys
+import tempfile
 import time
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from functools import partial
+from io import BytesIO
+from typing import Literal
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 import config
 from calibrate import delete_profile
 from capture import FrameCapture
+from corrections import CorrectionStore
+from dashboard_auth import DashboardAuth, SESSION_COOKIE
+from device_setup import AppleTVPairingError, AppleTVSetup, list_capture_devices
 from engine import Engine
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="The Clicker")
 engine = Engine()
+corrections = CorrectionStore(config.CORRECTIONS_DB_PATH)
+dashboard_auth = DashboardAuth(
+    config.DASHBOARD_AUTH_DB_PATH,
+    enabled=config.DASHBOARD_AUTH_ENABLED,
+    idle_seconds=config.DASHBOARD_SESSION_IDLE_SECONDS,
+    absolute_seconds=config.DASHBOARD_SESSION_ABSOLUTE_SECONDS,
+    pairing_ttl_seconds=config.DASHBOARD_PAIRING_CODE_TTL_SECONDS,
+)
+apple_tv_setup = AppleTVSetup(os.path.join(os.path.dirname(__file__), "credentials.json"))
 
 
-@app.on_event("startup")
-async def _resume_last_session():
-    """Auto resume the last running session after a service restart / reboot."""
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Resume prior work and always restore engine-owned volume on shutdown."""
     await engine.resume_last_session()
+    try:
+        yield
+    finally:
+        await engine.shutdown()
+
+
+app = FastAPI(title="The Clicker", lifespan=lifespan)
+
+
+def _is_loopback(host: str | None) -> bool:
+    return (host or "").split("%", 1)[0] in {"127.0.0.1", "::1", "localhost"}
+
+
+@app.middleware("http")
+async def protect_lan_dashboard(request: Request, call_next):
+    """Require trusted sessions for LAN API access and CSRF on mutations."""
+    if not dashboard_auth.enabled:
+        request_host = request.headers.get("host", "").rsplit(":", 1)[0].strip("[]")
+        allowed = _is_loopback(request_host) or ("pytest" in sys.modules and request_host == "testserver")
+        if not allowed:
+            return JSONResponse({"detail": "Invalid host for localhost-only dashboard"}, status_code=400)
+        return await call_next(request)
+    if _is_loopback(request.client.host if request.client else None):
+        return await call_next(request)
+    path = request.url.path
+    public = path in {
+        "/",
+        "/manifest.webmanifest",
+        "/clicker-icon.svg",
+        "/api/auth/status",
+        "/api/auth/pair",
+    }
+    if public or request.method == "OPTIONS" or not path.startswith("/api/"):
+        return await call_next(request)
+    token = request.cookies.get(SESSION_COOKIE)
+    session = dashboard_auth.authenticate(token)
+    if session is None:
+        return JSONResponse({"detail": "Pair this device to use the LAN dashboard"}, status_code=401)
+    request.state.dashboard_session = session
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        if not dashboard_auth.csrf_valid(session, request.headers.get("X-CSRF-Token")):
+            return JSONResponse({"detail": "Invalid or missing CSRF token"}, status_code=403)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def dashboard_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; connect-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    )
+    return response
+
+
+class PairDashboardRequest(BaseModel):
+    code: str
+    device_name: str = "Browser"
+
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    if not dashboard_auth.enabled or _is_loopback(request.client.host if request.client else None):
+        return {"required": False, "authenticated": True, "csrf_token": None}
+    token = request.cookies.get(SESSION_COOKIE)
+    session = dashboard_auth.authenticate(token)
+    return {
+        "required": True,
+        "authenticated": session is not None,
+        "csrf_token": dashboard_auth.csrf_for_token(token) if session else None,
+        "session": (
+            {
+                "id": session["id"],
+                "device_name": session["device_name"],
+                "expires_at": session["expires_at"],
+            }
+            if session
+            else None
+        ),
+    }
+
+
+@app.post("/api/auth/pair")
+async def pair_dashboard(req: PairDashboardRequest, request: Request, response: Response):
+    if not dashboard_auth.enabled:
+        return {"ok": True, "required": False, "csrf_token": None}
+    try:
+        token, csrf, session = dashboard_auth.pair(req.code, req.device_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=config.DASHBOARD_SESSION_ABSOLUTE_SECONDS,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True, "required": True, "csrf_token": csrf, "session": session}
+
+
+@app.get("/api/auth/host-code")
+async def pairing_code(request: Request):
+    if not _is_loopback(request.client.host if request.client else None):
+        raise HTTPException(status_code=404, detail="Not found")
+    return {
+        "enabled": dashboard_auth.enabled,
+        "code": dashboard_auth.pairing_code_for_host() if dashboard_auth.enabled else None,
+    }
+
+
+@app.get("/api/auth/devices")
+async def trusted_devices():
+    return {"devices": dashboard_auth.trusted_devices()}
+
+
+@app.delete("/api/auth/devices/{session_id}")
+async def revoke_device(session_id: str, response: Response):
+    if not dashboard_auth.revoke(session_id):
+        raise HTTPException(status_code=404, detail="Trusted device not found")
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------
@@ -39,6 +190,7 @@ async def _resume_last_session():
 class StartRequest(BaseModel):
     channel: str | None = None
     shadow: bool = False
+    detection_mode: Literal["legacy", "hybrid"] | None = None
 
 
 class CalibrateRequest(BaseModel):
@@ -89,8 +241,16 @@ async def get_status():
 async def start_engine(req: StartRequest = StartRequest()):
     """Start the detection engine."""
     try:
-        await engine.start(channel=req.channel, shadow=req.shadow)
-        return {"ok": True, "state": engine.state.value}
+        await engine.start(
+            channel=req.channel,
+            shadow=req.shadow,
+            detection_mode=req.detection_mode,
+        )
+        return {
+            "ok": True,
+            "state": engine.state.value,
+            "detection_mode": engine.get_status().detection_mode,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -145,6 +305,13 @@ class MarkRequest(BaseModel):
     kind: str  # "content" | "commercial"
 
 
+class FingerprintEnrollRequest(BaseModel):
+    name: str
+    seconds: float = 10.0
+    advertisement_id: str | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
 @app.post("/api/mark/start")
 async def mark_start(req: MarkRequest):
     """Begin collecting confidence samples labeled as content or commercial."""
@@ -190,6 +357,232 @@ async def get_stats():
         stats["session_duration"] = 0
         stats["time_saved_min"] = 0
     return stats
+
+
+@app.post("/api/control/mute")
+async def manual_mute():
+    try:
+        changed = await engine.manual_mute()
+        return {"ok": True, "changed": changed}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/api/control/unmute")
+async def manual_unmute():
+    try:
+        changed = await engine.manual_unmute()
+        return {"ok": True, "changed": changed}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+class CorrectionRequest(BaseModel):
+    label: Literal["program", "commercial"]
+    action: Literal["none", "mute", "unmute"] = "none"
+
+
+class RelabelRequest(BaseModel):
+    label: Literal["program", "commercial"]
+
+
+@app.post("/api/corrections")
+async def create_correction(req: CorrectionRequest):
+    status = engine.get_status()
+    if not status.session_id:
+        raise HTTPException(status_code=409, detail="Start a capture session before labeling")
+    if req.action == "mute":
+        await manual_mute()
+    elif req.action == "unmute":
+        await manual_unmute()
+    item, created = corrections.add(
+        label=req.label,
+        session_id=status.session_id,
+        channel=status.channel,
+        action=req.action,
+        evidence=engine.correction_evidence(),
+    )
+    return {"ok": True, "created": created, "correction": item}
+
+
+@app.get("/api/corrections")
+async def list_corrections(limit: int = 100):
+    return {"corrections": corrections.list(limit)}
+
+
+@app.post("/api/corrections/{correction_id}/undo")
+async def undo_correction(correction_id: str):
+    item = corrections.undo(correction_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Active correction not found")
+    return {"ok": True, "correction": item}
+
+
+@app.patch("/api/corrections/{correction_id}")
+async def relabel_correction(correction_id: str, req: RelabelRequest):
+    item = corrections.relabel(correction_id, req.label)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Correction not found")
+    return {"ok": True, "correction": item}
+
+
+@app.get("/api/activity")
+async def activity(limit: int = 100):
+    def event_evidence(event: dict) -> dict:
+        timestamp = float(event.get("t") or 0)
+        nearest = min(
+            engine._history,
+            key=lambda point: abs(float(point.get("t") or 0) - timestamp),
+            default={},
+        )
+        return {
+            "detection_mode": engine.get_status().detection_mode,
+            "confidence_template": nearest.get("tmpl"),
+            "confidence_edge": nearest.get("edge"),
+            "confidence_color": nearest.get("color"),
+        }
+
+    events = [
+        {
+            "id": f"event-{index}-{event.get('t')}",
+            "timestamp": event.get("t"),
+            "kind": event.get("type", "event"),
+            "reason": event.get("reason"),
+            "source": "engine",
+            "evidence": event_evidence(event),
+        }
+        for index, event in enumerate(engine._events[-max(1, min(limit, 500)):])
+    ]
+    labels = [
+        {
+            "id": item["id"],
+            "timestamp": item["timestamp"],
+            "kind": f"labeled_{item['label']}",
+            "reason": item["action"],
+            "source": "correction",
+            "undone": item["undone"],
+            "evidence": item["evidence"],
+        }
+        for item in corrections.list(limit)
+    ]
+    combined = sorted(events + labels, key=lambda item: item["timestamp"] or 0, reverse=True)
+    return {"activity": combined[:max(1, min(limit, 500))]}
+
+
+@app.get("/api/devices/capture")
+async def capture_devices():
+    return {
+        "devices": await asyncio.to_thread(list_capture_devices),
+        "selected": (
+            config.CAPTURE_DEVICE_NAME
+            if platform.system() == "Darwin"
+            else str(config.CAPTURE_DEVICE)
+        ),
+    }
+
+
+class CaptureDeviceSelectRequest(BaseModel):
+    id: str
+    name: str
+
+
+@app.post("/api/devices/capture/select")
+async def select_capture_device(req: CaptureDeviceSelectRequest):
+    if platform.system() == "Darwin":
+        snapshot = _apply_settings({"CAPTURE_DEVICE_NAME": req.name})
+        selected = req.name
+    else:
+        snapshot = _apply_settings({"CAPTURE_DEVICE": req.id})
+        selected = req.id
+    return {"ok": True, "selected": selected, **snapshot}
+
+
+@app.get("/api/devices/appletv")
+async def apple_tv_devices():
+    try:
+        return {"devices": await apple_tv_setup.scan(), "selected": config.APPLE_TV_ID}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Apple TV discovery failed: {exc}")
+
+
+class AppleTVPairStartRequest(BaseModel):
+    identifier: str
+    protocol: Literal["Companion", "AirPlay"] = "Companion"
+
+
+class AppleTVPairFinishRequest(BaseModel):
+    token: str
+    pin: int | None = None
+
+
+@app.post("/api/devices/appletv/pair/start")
+async def apple_tv_pair_start(req: AppleTVPairStartRequest):
+    try:
+        result = await apple_tv_setup.begin(req.identifier, req.protocol)
+        config.APPLE_TV_ID = req.identifier
+        _write_runtime_settings()
+        return result
+    except (ValueError, AppleTVPairingError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Unexpected error starting %s pairing", req.protocol)
+        message = str(exc).strip() or type(exc).__name__
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not start {req.protocol} pairing: {message}",
+        ) from exc
+
+
+@app.post("/api/devices/appletv/pair/finish")
+async def apple_tv_pair_finish(req: AppleTVPairFinishRequest):
+    try:
+        return await apple_tv_setup.finish(req.token, req.pin)
+    except (ValueError, AppleTVPairingError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Unexpected error finishing Apple TV pairing")
+        message = str(exc).strip() or type(exc).__name__
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not finish Apple TV pairing: {message}",
+        ) from exc
+
+
+@app.get("/api/fingerprints")
+async def list_fingerprints():
+    return {"advertisements": await engine.list_fingerprints()}
+
+
+@app.post("/api/fingerprints/enroll")
+async def enroll_fingerprint(req: FingerprintEnrollRequest):
+    """Explicitly trust recent buffered audio as a confirmed advertisement."""
+    try:
+        return await engine.enroll_fingerprint(
+            name=req.name,
+            seconds=req.seconds,
+            advertisement_id=req.advertisement_id,
+            metadata=req.metadata,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/fingerprints/{advertisement_id}")
+async def delete_fingerprint(advertisement_id: str):
+    deleted = await engine.delete_fingerprint(advertisement_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="fingerprint not found")
+    return {"ok": True}
+
+
+@app.get("/api/ml/dataset/export")
+async def export_ml_dataset():
+    await engine.export_feature_dataset(config.ML_EXPORT_PATH)
+    return FileResponse(
+        config.ML_EXPORT_PATH,
+        media_type="text/csv",
+        filename="the-clicker-features.csv",
+    )
 
 
 @app.post("/api/toggle")
@@ -390,6 +783,7 @@ async def get_live_palette():
 
 
 TUNABLE_SETTINGS = {
+    "DETECTION_MODE": str,
     "FIRST_SKIP_COUNT": int,
     "SUBSEQUENT_SKIP_COUNT": int,
     "SKIP_SETTLE_TIME": float,
@@ -405,12 +799,85 @@ TUNABLE_SETTINGS = {
     "UNMUTE_STEPS": int,
     "PLAYBACK_MODE_OVERRIDE": str,
     "MAX_COMMERCIAL_DURATION": int,
+    "MANUAL_OVERRIDE_COOLDOWN_SECONDS": int,
     "REENTRY_COOLDOWN_SECONDS": int,
     "REENTRY_DEBOUNCE_FRAMES": int,
     "CALIBRATION_DURATION": int,
     "BREAK_DECAY_STRENGTH": float,
     "EXIT_DECAY_MAX_FRAMES": int,
+    "HYBRID_COMMERCIAL_ENTER_THRESHOLD": float,
+    "HYBRID_PROGRAM_EXIT_THRESHOLD": float,
+    "HYBRID_LEGACY_VISUAL_ENABLED": bool,
+    "AUDIO_TRANSITION_ENABLED": bool,
+    "AUDIO_FINGERPRINT_ENABLED": bool,
+    "AD_OVERLAY_ENABLED": bool,
+    "ML_CLASSIFIER_ENABLED": bool,
+    "AUTOMATIC_MUTING_ENABLED": bool,
+    "APPLE_TV_ID": str,
+    "CAPTURE_DEVICE_NAME": str,
+    "CAPTURE_DEVICE": type(config.CAPTURE_DEVICE),
+    "AUDIO_DEVICE_NAME": str,
+    "HYBRID_COMMERCIAL_ENTER_THRESHOLD": float,
+    "HYBRID_PROGRAM_EXIT_THRESHOLD": float,
+    "ML_COMMERCIAL_THRESHOLD": float,
+    "ML_PROGRAM_THRESHOLD": float,
+    "FINGERPRINT_MATCH_THRESHOLD": float,
+    "FINGERPRINT_MIN_MATCH_DURATION": float,
+    "AUDIO_TRANSITION_SCORE_THRESHOLD": float,
+    "HYBRID_AUDIO_TRANSITION_WEIGHT": float,
+    "HYBRID_FINGERPRINT_WEIGHT": float,
+    "HYBRID_AD_OVERLAY_WEIGHT": float,
+    "HYBRID_ML_WEIGHT": float,
 }
+
+SETTING_GROUPS = {
+    "video": [
+        "CAPTURE_DEVICE_NAME", "CAPTURE_DEVICE", "DETECTION_MODE", "HYBRID_LEGACY_VISUAL_ENABLED",
+        "AD_OVERLAY_ENABLED",
+        "LOGO_MATCH_THRESHOLD", "LOGO_RECOVERY_THRESHOLD", "DEBOUNCE_FRAMES",
+        "RECOVERY_DEBOUNCE_FRAMES", "COLOR_MATCH_THRESHOLD", "COLOR_RECOVERY_THRESHOLD",
+        "COLOR_DEBOUNCE_FRAMES", "COLOR_RECOVERY_DEBOUNCE_FRAMES",
+    ],
+    "audio": ["AUDIO_DEVICE_NAME", "AUDIO_TRANSITION_ENABLED", "AUDIO_TRANSITION_SCORE_THRESHOLD"],
+    "fingerprinting": ["AUDIO_FINGERPRINT_ENABLED", "FINGERPRINT_MATCH_THRESHOLD", "FINGERPRINT_MIN_MATCH_DURATION"],
+    "ml": ["ML_CLASSIFIER_ENABLED", "ML_COMMERCIAL_THRESHOLD", "ML_PROGRAM_THRESHOLD"],
+    "fusion": [
+        "HYBRID_COMMERCIAL_ENTER_THRESHOLD", "HYBRID_PROGRAM_EXIT_THRESHOLD",
+        "HYBRID_AUDIO_TRANSITION_WEIGHT", "HYBRID_FINGERPRINT_WEIGHT",
+        "HYBRID_AD_OVERLAY_WEIGHT", "HYBRID_ML_WEIGHT",
+    ],
+    "intervention": [
+        "AUTOMATIC_MUTING_ENABLED", "APPLE_TV_ID", "MUTE_STEPS", "UNMUTE_STEPS",
+        "FIRST_SKIP_COUNT", "SUBSEQUENT_SKIP_COUNT", "SKIP_SETTLE_TIME",
+        "PLAYBACK_MODE_OVERRIDE", "MAX_COMMERCIAL_DURATION",
+    ],
+    "safety": [
+        "MANUAL_OVERRIDE_COOLDOWN_SECONDS", "REENTRY_COOLDOWN_SECONDS",
+        "REENTRY_DEBOUNCE_FRAMES", "BREAK_DECAY_STRENGTH", "EXIT_DECAY_MAX_FRAMES",
+    ],
+    "calibration": ["CALIBRATION_DURATION"],
+}
+
+SETTING_BOUNDS = {
+    "LOGO_MATCH_THRESHOLD": (0.0, 1.0), "LOGO_RECOVERY_THRESHOLD": (0.0, 1.0),
+    "COLOR_MATCH_THRESHOLD": (0.0, 1.0), "COLOR_RECOVERY_THRESHOLD": (0.0, 1.0),
+    "HYBRID_COMMERCIAL_ENTER_THRESHOLD": (0.0, 1.0),
+    "HYBRID_PROGRAM_EXIT_THRESHOLD": (0.0, 1.0),
+    "ML_COMMERCIAL_THRESHOLD": (0.0, 1.0), "ML_PROGRAM_THRESHOLD": (0.0, 1.0),
+    "FINGERPRINT_MATCH_THRESHOLD": (0.0, 1.0),
+    "AUDIO_TRANSITION_SCORE_THRESHOLD": (0.0, 1.0),
+    "BREAK_DECAY_STRENGTH": (0.0, 1.0),
+    "DEBOUNCE_FRAMES": (1, 120), "RECOVERY_DEBOUNCE_FRAMES": (1, 120),
+    "COLOR_DEBOUNCE_FRAMES": (1, 120), "COLOR_RECOVERY_DEBOUNCE_FRAMES": (1, 120),
+    "MUTE_STEPS": (1, 30), "UNMUTE_STEPS": (1, 30),
+    "MAX_COMMERCIAL_DURATION": (30, 1800), "CALIBRATION_DURATION": (5, 600),
+    "FINGERPRINT_MIN_MATCH_DURATION": (0.5, 120.0),
+    "HYBRID_AUDIO_TRANSITION_WEIGHT": (0.0, 10.0),
+    "HYBRID_FINGERPRINT_WEIGHT": (0.0, 10.0),
+    "HYBRID_AD_OVERLAY_WEIGHT": (0.0, 10.0), "HYBRID_ML_WEIGHT": (0.0, 10.0),
+}
+
+DEFAULT_SETTINGS = {key: getattr(config, key) for key in TUNABLE_SETTINGS}
 
 # Named detection presets, bundles applied through _apply_settings. Each is a
 # point on one axis: how eager the system is to call something a commercial.
@@ -451,18 +918,91 @@ class PresetRequest(BaseModel):
 @app.get("/api/settings")
 async def get_settings():
     """Return current tunable settings."""
-    return {key: getattr(config, key) for key in TUNABLE_SETTINGS}
+    snapshot = {key: getattr(config, key) for key in TUNABLE_SETTINGS}
+    snapshot["_meta"] = {
+        "active_preset": _active_preset(snapshot),
+        "custom_overrides": _active_preset(snapshot) is None,
+        "groups": SETTING_GROUPS,
+        "defaults": DEFAULT_SETTINGS,
+    }
+    return snapshot
 
 
-def _apply_settings(settings: dict) -> dict:
+def _active_preset(snapshot: dict | None = None) -> str | None:
+    values = snapshot or {key: getattr(config, key) for key in TUNABLE_SETTINGS}
+    for name, bundle in PRESETS.items():
+        if all(
+            (abs(float(values[key]) - float(value)) < 1e-9)
+            if isinstance(value, float)
+            else values[key] == value
+            for key, value in bundle.items()
+        ):
+            return name
+    return None
+
+
+def _write_runtime_settings() -> None:
+    if "pytest" in sys.modules:
+        return
+    target = pathlib.Path(config.RUNTIME_SETTINGS_FILE)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {key: getattr(config, key) for key in TUNABLE_SETTINGS}
+    with tempfile.NamedTemporaryFile(
+        "w", dir=target.parent, prefix="settings-", suffix=".tmp", delete=False
+    ) as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        temp_name = handle.name
+    os.replace(temp_name, target)
+
+
+def _apply_settings(settings: dict, *, persist: bool = True) -> dict:
     """Validate + apply a {key: value} bundle onto config. Raises 400 on an
     unknown key. Returns the full current tunable settings snapshot."""
+    proposed = {key: getattr(config, key) for key in TUNABLE_SETTINGS}
     for key, value in settings.items():
         if key not in TUNABLE_SETTINGS:
             raise HTTPException(status_code=400, detail=f"Unknown setting: {key}")
         cast = TUNABLE_SETTINGS[key]
-        setattr(config, key, cast(value))
-        logger.info("Setting %s = %s", key, cast(value))
+        try:
+            if cast is bool:
+                if isinstance(value, bool):
+                    converted = value
+                elif str(value).lower() in {"1", "true", "yes", "on"}:
+                    converted = True
+                elif str(value).lower() in {"0", "false", "no", "off"}:
+                    converted = False
+                else:
+                    raise ValueError("expected boolean")
+            else:
+                converted = cast(value)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid {key}: {exc}")
+        if key == "DETECTION_MODE" and converted not in {"legacy", "hybrid"}:
+            raise HTTPException(status_code=400, detail="DETECTION_MODE must be legacy or hybrid")
+        if key == "PLAYBACK_MODE_OVERRIDE" and converted not in {"", "live", "delayed"}:
+            raise HTTPException(status_code=400, detail="Playback override must be blank, live, or delayed")
+        if key in SETTING_BOUNDS:
+            minimum, maximum = SETTING_BOUNDS[key]
+            if converted < minimum or converted > maximum:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{key} must be between {minimum} and {maximum}",
+                )
+        proposed[key] = converted
+    if proposed["HYBRID_PROGRAM_EXIT_THRESHOLD"] >= proposed["HYBRID_COMMERCIAL_ENTER_THRESHOLD"]:
+        raise HTTPException(status_code=400, detail="Hybrid exit threshold must be below entry threshold")
+    if proposed["ML_PROGRAM_THRESHOLD"] >= proposed["ML_COMMERCIAL_THRESHOLD"]:
+        raise HTTPException(status_code=400, detail="ML program threshold must be below commercial threshold")
+    if proposed["LOGO_RECOVERY_THRESHOLD"] <= proposed["LOGO_MATCH_THRESHOLD"]:
+        raise HTTPException(status_code=400, detail="Logo recovery threshold must exceed match threshold")
+    if proposed["COLOR_RECOVERY_THRESHOLD"] <= proposed["COLOR_MATCH_THRESHOLD"]:
+        raise HTTPException(status_code=400, detail="Color recovery threshold must exceed match threshold")
+    for key, value in settings.items():
+        converted = proposed[key]
+        setattr(config, key, converted)
+        logger.info("Setting %s = %s", key, converted)
+    if settings and persist:
+        _write_runtime_settings()
     return {key: getattr(config, key) for key in TUNABLE_SETTINGS}
 
 
@@ -481,6 +1021,61 @@ async def apply_preset(req: PresetRequest):
     snapshot = _apply_settings(bundle)
     logger.info("Applied preset: %s", req.name)
     return {"ok": True, "preset": req.name.lower(), **snapshot}
+
+
+class ResetSettingsRequest(BaseModel):
+    group: str | None = None
+
+
+@app.post("/api/settings/reset")
+async def reset_settings(req: ResetSettingsRequest):
+    if req.group is None or req.group == "all":
+        keys = list(TUNABLE_SETTINGS)
+    elif req.group in SETTING_GROUPS:
+        keys = SETTING_GROUPS[req.group]
+    else:
+        raise HTTPException(status_code=400, detail="Unknown settings group")
+    snapshot = _apply_settings({key: DEFAULT_SETTINGS[key] for key in keys})
+    return {"ok": True, "group": req.group or "all", **snapshot}
+
+
+@app.get("/api/settings/export")
+async def export_settings():
+    # Strict allowlist: credentials, session tokens and paths never leave the host.
+    payload = {
+        "schema_version": 1,
+        "settings": {key: getattr(config, key) for key in TUNABLE_SETTINGS},
+    }
+    return JSONResponse(
+        payload,
+        headers={"Content-Disposition": "attachment; filename=clicker-settings.json"},
+    )
+
+
+@app.post("/api/settings/import")
+async def import_settings(payload: dict):
+    if payload.get("schema_version") != 1 or not isinstance(payload.get("settings"), dict):
+        raise HTTPException(status_code=400, detail="Unsupported settings export")
+    snapshot = _apply_settings(payload["settings"])
+    return {"ok": True, **snapshot}
+
+
+def _load_persisted_settings() -> None:
+    if "pytest" in sys.modules:
+        return
+    try:
+        with open(config.RUNTIME_SETTINGS_FILE) as handle:
+            values = json.load(handle)
+        if not isinstance(values, dict):
+            raise ValueError("settings root must be an object")
+        _apply_settings(values, persist=False)
+    except FileNotFoundError:
+        return
+    except Exception as exc:
+        logger.warning("Ignoring invalid persisted settings: %s", exc)
+
+
+_load_persisted_settings()
 
 
 @app.get("/api/history")
@@ -694,6 +1289,84 @@ async def get_full_frame():
     return {"frame_b64": b64, "corner": corner}
 
 
+def _lan_address() -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("192.0.2.1", 9))
+        return str(sock.getsockname()[0])
+    except OSError:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except OSError:
+            return "127.0.0.1"
+    finally:
+        sock.close()
+
+
+@app.get("/api/network/info")
+async def network_info():
+    address = _lan_address()
+    return {
+        "bind_host": config.DASHBOARD_HOST,
+        "port": config.DASHBOARD_PORT,
+        "lan_enabled": config.DASHBOARD_HOST not in {"127.0.0.1", "::1", "localhost"},
+        "auth_required": dashboard_auth.enabled,
+        "address": address,
+        "url": f"http://{address}:{config.DASHBOARD_PORT}/",
+        "enable_hint": f"CLICKER_HOST=0.0.0.0 CLICKER_PORT={config.DASHBOARD_PORT} python3 server.py",
+    }
+
+
+@app.get("/api/network/qr")
+async def network_qr():
+    try:
+        import qrcode
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Install the qrcode dependency to generate a QR code")
+    image = qrcode.make(f"http://{_lan_address()}:{config.DASHBOARD_PORT}/")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return Response(
+        content=output.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/api/setup")
+async def get_setup_state():
+    try:
+        with open(config.SETUP_STATE_FILE) as handle:
+            state = json.load(handle)
+    except (FileNotFoundError, ValueError, OSError):
+        state = {"complete": False, "step": 0}
+    return state
+
+
+@app.post("/api/setup")
+async def save_setup_state(state: dict):
+    allowed = {
+        "complete": bool(state.get("complete", False)),
+        "step": max(0, min(int(state.get("step", 0)), 6)),
+    }
+    path = pathlib.Path(config.SETUP_STATE_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as handle:
+        json.dump(allowed, handle, indent=2)
+    return {"ok": True, **allowed}
+
+
+@app.post("/api/auth/logout")
+async def logout_dashboard(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE)
+    session = dashboard_auth.authenticate(token, touch=False)
+    if session:
+        dashboard_auth.revoke(session["id"])
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True}
+
+
 # ------------------------------------------------------------------
 # Dashboard
 # ------------------------------------------------------------------
@@ -704,6 +1377,40 @@ async def dashboard():
     html_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
     with open(html_path) as f:
         return f.read()
+
+
+@app.get("/help", response_class=HTMLResponse)
+async def help_page():
+    """Serve the local setup, Legacy, and model-training guide."""
+    html_path = os.path.join(os.path.dirname(__file__), "help.html")
+    with open(html_path) as f:
+        return f.read()
+
+
+@app.get("/manifest.webmanifest")
+async def manifest():
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "manifest.webmanifest"),
+        media_type="application/manifest+json",
+    )
+
+
+@app.get("/clicker-icon.svg")
+async def clicker_icon():
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "clicker-icon.svg"),
+        media_type="image/svg+xml",
+    )
+
+
+@app.get("/clicker-icon-{size}.png")
+async def clicker_png_icon(size: int):
+    if size not in {192, 512}:
+        raise HTTPException(status_code=404, detail="Icon not found")
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), f"clicker-icon-{size}.png"),
+        media_type="image/png",
+    )
 
 
 # ------------------------------------------------------------------
@@ -719,7 +1426,12 @@ def main():
         datefmt=config.LOG_DATE_FORMAT,
     )
 
-    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+    uvicorn.run(
+        app,
+        host=config.DASHBOARD_HOST,
+        port=config.DASHBOARD_PORT,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

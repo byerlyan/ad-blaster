@@ -5,13 +5,20 @@
 # versions this was developed/tested against, newer usually works, but pyatv
 # in particular changes its API across releases, so pin if you hit trouble.
 
-pyatv>=0.16            # Apple TV control (mute / skip / playback state)
+pyatv>=0.16,<0.19      # Apple TV control (mute / skip / playback state)
+# pyatv 0.18 passes SRP's private key positionally. srptools 2.0 made that
+# argument keyword-only, breaking both Companion and AirPlay PIN submission.
+srptools>=1.0.1,<2
 fastapi>=0.110         # web API + dashboard
 uvicorn>=0.27          # ASGI server that runs FastAPI
 numpy>=1.24            # image array math
+qrcode[pil]>=7.4       # mobile LAN setup QR code (generated locally)
 
 # OpenCV: use the headless build on a server/LXC (no GUI libs needed).
 # On a desktop where you want native preview windows, swap in `opencv-python`.
 opencv-python-headless>=4.8
+
+# Stable capture-device enumeration by AVFoundation name on macOS.
+pyobjc-framework-AVFoundation>=9.0; platform_system == "Darwin"
 
 # pydantic is pulled in automatically by fastapi (used for request models).

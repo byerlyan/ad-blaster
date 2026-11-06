@@ -1,0 +1,6 @@
+-r requirements-dev.txt
+
+# Offline training/serialization only. Runtime inference loads the artifact
+# when these packages are installed and otherwise falls back safely.
+scikit-learn>=1.3
+joblib>=1.3

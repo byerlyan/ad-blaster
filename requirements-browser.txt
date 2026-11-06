@@ -1,0 +1,2 @@
+# Optional local responsive-browser QA. Not needed to run The Clicker.
+playwright>=1.50

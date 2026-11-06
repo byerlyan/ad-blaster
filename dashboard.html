@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#d4714a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/clicker-icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/clicker-icon-192.png">
 <title>The Clicker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3/dist/chartjs-plugin-annotation.min.js"></script>
@@ -66,6 +72,8 @@ body {
 /* Tab navigation */
 .tabs { display: flex; gap: 4px; }
 .tab {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.78rem;
   font-weight: 600;
   padding: 7px 16px;
@@ -74,6 +82,7 @@ body {
   background: transparent;
   color: var(--text3);
   cursor: pointer;
+  text-decoration: none;
 }
 .tab:hover { color: var(--text2); background: var(--surface2); }
 .tab.active { background: var(--surface2); color: var(--text); border-color: var(--border); }
@@ -320,6 +329,7 @@ select:focus, .input:focus { border-color: var(--accent); }
   cursor: crosshair;
   width: 100%;
   display: block;
+  touch-action: none;
 }
 
 /* Scores */
@@ -344,7 +354,7 @@ select:focus, .input:focus { border-color: var(--accent); }
   position: fixed;
   top: 16px;
   right: 16px;
-  z-index: 100;
+  z-index: 300;
   border-radius: 8px;
   padding: 12px 18px;
   max-width: 400px;
@@ -373,20 +383,108 @@ select:focus, .input:focus { border-color: var(--accent); }
   .img-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 .btn-sm{padding:4px 8px;font-size:0.72rem}
+.bottom-nav { display:none; }
+.quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.quick-actions button { min-height:52px; white-space:normal; }
+.segmented { display:flex; gap:4px; padding:4px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); }
+.segmented button { flex:1; border:0; background:transparent; min-height:40px; }
+.segmented button.active { background:var(--surface); color:var(--accent); }
+.subhead { margin:16px 0 4px; color:var(--accent); font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.activity-item { padding:12px 0; border-bottom:1px solid var(--border); display:grid; grid-template-columns:1fr auto; gap:8px; }
+.activity-item:last-child { border:0; }
+.connection-status { display:none; position:sticky; top:0; z-index:90; padding:9px 16px; text-align:center; background:#39201b; color:#f0b4a5; border-bottom:1px solid var(--red); }
+.connection-status.show { display:block; }
+.modal-backdrop { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(10,8,6,.88); }
+.modal-backdrop.hidden { display:none; }
+.modal { width:min(520px,100%); max-height:90vh; overflow:auto; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; box-shadow:0 24px 80px #000; }
+.modal h2 { margin-bottom:8px; }
+.modal p { color:var(--text2); margin-bottom:14px; }
+.modal .input { width:100%; min-height:48px; margin-bottom:10px; }
+.range-row { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; }
+.range-row input[type=range] { width:100%; min-height:44px; accent-color:var(--accent); }
+.custom-warning { color:var(--yellow); font-size:.75rem; margin-top:8px; }
+.settings-actions { position:sticky; bottom:0; display:flex; gap:8px; margin-top:12px; padding-top:10px; background:linear-gradient(transparent,var(--surface) 20%); }
+.settings-actions button { flex:1; min-height:44px; }
+.wizard-progress { display:flex; gap:5px; margin:12px 0 18px; }
+.wizard-progress span { height:4px; flex:1; border-radius:2px; background:var(--surface2); }
+.wizard-progress span.done { background:var(--accent); }
+.wizard-check-status { margin-top:12px; padding:10px 12px; border-radius:7px; font-size:.8rem; line-height:1.4; }
+.wizard-check-status:empty { display:none; }
+.wizard-check-status.checking { background:var(--surface2); color:var(--text2); }
+.wizard-check-status.success { background:var(--green-dim); border:1px solid var(--green); color:var(--green); }
+.wizard-check-status.error { background:var(--red-dim); border:1px solid var(--red); color:var(--red); }
+.wizard-device-picker { display:grid; gap:6px; margin-bottom:12px; color:var(--text2); font-size:.8rem; }
+.wizard-device-picker select { width:100%; min-height:44px; }
+.wizard-pair-grid { display:grid; gap:10px; margin-top:12px; }
+.wizard-pair-card { padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); }
+.wizard-pair-card strong { display:block; margin-bottom:4px; font-size:.84rem; }
+.wizard-pair-card p { margin:0 0 10px; font-size:.76rem; }
+.wizard-pair-controls { display:flex; gap:8px; margin-top:8px; }
+.wizard-pair-controls.hidden { display:none; }
+.wizard-pair-controls .input { flex:1; min-width:0; margin:0; }
+.wizard-pair-status { margin-top:8px; font-size:.76rem; color:var(--text3); }
+.wizard-pair-status.success { color:var(--green); }
+.wizard-pair-status.error { color:var(--red); }
+.wizard-form-grid { display:grid; gap:10px; }
+.wizard-form-grid .input, .wizard-form-grid select { width:100%; min-height:44px; margin:0; }
+.wizard-summary { padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text2); font-size:.8rem; line-height:1.5; }
+.device-list { display:grid; gap:8px; }
+.device-list select { width:100%; min-height:44px; }
+body.connection-lost .main button, body.connection-lost #tab-setup button { opacity:.4; pointer-events:none; }
+
+@media (max-width: 768px) {
+  body { padding-bottom:calc(70px + env(safe-area-inset-bottom)); }
+  .topbar { padding:12px 16px; padding-top:calc(12px + env(safe-area-inset-top)); }
+  .topbar .tabs { display:none; }
+  .main > .panel, #tab-setup .panel { padding:16px; overflow:visible; }
+  .bottom-nav { display:grid; grid-template-columns:repeat(6,1fr); position:fixed; left:0; right:0; bottom:0; z-index:120; padding:6px 4px calc(6px + env(safe-area-inset-bottom)); background:rgba(33,30,25,.98); border-top:1px solid var(--border); }
+  .bottom-nav button, .bottom-nav a { display:block; min-width:0; min-height:48px; padding:5px 2px; border:0; background:transparent; color:var(--text3); font-size:.66rem; line-height:1.5; text-align:center; text-decoration:none; white-space:normal; }
+  .bottom-nav button.active, .bottom-nav a.active { color:var(--accent); }
+  button, select, .input, .input-sm { min-height:44px; }
+  .btn-sm { min-height:40px; }
+  .hero-status { padding:22px 12px; }
+  .hero-value { font-size:1.7rem; }
+  .chart-wrap { height:190px; }
+  .img-grid { grid-template-columns:1fr 1fr; }
+  .setting-row { gap:12px; }
+  .setting-name { line-height:1.25; }
+  .banner { left:12px; right:12px; top:calc(12px + env(safe-area-inset-top)); max-width:none; }
+}
+@media (max-width: 430px) {
+  .main, .main.cols-2 { display:block; }
+  .stat-grid { gap:5px; }
+  .stat-card { padding:10px 5px; }
+  .quick-actions { grid-template-columns:1fr 1fr; }
+  .card { padding:14px; }
+  .img-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 340px) {
+  .topbar h1 { font-size:1rem; }
+  .badge { padding:4px 6px; }
+  .quick-actions { grid-template-columns:1fr; }
+  .btn-group { flex-direction:column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
 </style>
 </head>
 <body>
 
 <div class="page">
   <div id="banner" class="banner"></div>
+  <div id="connection-status" class="connection-status" role="status">Connection lost. Controls are paused while The Clicker reconnects.</div>
 
   <!-- Top Bar -->
   <div class="topbar">
     <h1>The Clicker</h1>
     <div class="tabs">
-      <button class="tab active" id="tab-btn-watch" onclick="showTab('watch')">Watch</button>
-      <button class="tab" id="tab-btn-tune" onclick="showTab('tune')">Tune</button>
-      <button class="tab" id="tab-btn-setup" onclick="showTab('setup')">Setup</button>
+      <button class="tab active" id="tab-btn-watch" onclick="showTab('watch')">Home</button>
+      <button class="tab" id="tab-btn-activity" onclick="showTab('activity')">Activity</button>
+      <button class="tab" id="tab-btn-setup" onclick="showTab('setup')">Calibration</button>
+      <button class="tab" id="tab-btn-tune" onclick="showTab('tune')">Settings</button>
+      <button class="tab" id="tab-btn-diagnostics" onclick="showTab('diagnostics')">Diagnostics</button>
+      <a class="tab" href="/help">Help</a>
     </div>
     <div class="topbar-right">
       <span class="badge badge-off" id="engine-badge">Offline</span>
@@ -406,6 +504,13 @@ select:focus, .input:focus { border-color: var(--accent); }
           </div>
           <div class="hero-sub" id="s-channel"></div>
         </div>
+        <div class="quick-actions" aria-label="Quick corrections and volume controls">
+          <button class="btn-green" onclick="correctNow('program')">This is program</button>
+          <button class="btn-red" onclick="correctNow('commercial')">This is a commercial</button>
+          <button onclick="manualVolume('mute')">Mute now</button>
+          <button onclick="manualVolume('unmute')">Unmute now</button>
+        </div>
+        <div id="correction-undo" class="hidden" style="margin-top:8px;font-size:.78rem;color:var(--text2)">Label saved. <button class="btn-sm" onclick="undoLastCorrection()">Undo</button></div>
       </div>
 
       <div class="section">
@@ -432,9 +537,14 @@ select:focus, .input:focus { border-color: var(--accent); }
       <div class="section">
         <div class="section-title">Channel Profile</div>
         <div class="card">
-          <select id="channel-select" style="width:100%;margin-bottom:10px;font-size:0.85rem;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)" onchange="previewProfile()">
+          <select id="channel-select" style="width:100%;margin-bottom:10px;font-size:0.85rem;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text)" onchange="syncHomeProfile()">
             <option value="">Select a profile...</option>
           </select>
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:0.8rem;color:var(--text3)">Detection mode
+            <select id="detection-mode" class="input-sm" style="width:auto;text-align:left">
+              <option value="legacy">Legacy</option><option value="hybrid">Hybrid</option>
+            </select>
+          </label>
           <div id="profile-preview" class="hidden">
             <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px">
               <div style="flex-shrink:0">
@@ -467,7 +577,7 @@ select:focus, .input:focus { border-color: var(--accent); }
         <div class="btn-group" id="ctl-run-group" style="margin-bottom:8px;display:none">
           <div class="btn-col"><button class="btn-red" id="btn-stop" onclick="stopEngine()" disabled>Stop</button><div class="btn-desc">Stop the engine</div></div>
           <div class="btn-col"><button id="btn-disarm" onclick="disarm()" disabled style="background:var(--red-dim);color:var(--red);border-color:var(--red)">Disarm</button><div class="btn-desc">Unmute &amp; reset now</div></div>
-          <div class="btn-col"><button id="btn-toggle" onclick="toggleEngine()" disabled>Disable</button><div class="btn-desc">Pause actions, keep watching</div></div>
+          <div class="btn-col"><button id="btn-toggle" onclick="toggleEngine()" disabled>Pause</button><div class="btn-desc">Pause actions, keep watching</div></div>
         </div>
       </div>
 
@@ -501,6 +611,25 @@ select:focus, .input:focus { border-color: var(--accent); }
         <div class="card">
           <div class="chart-wrap"><canvas id="timeline-chart"></canvas></div>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Training &amp; Trusted Ads</div>
+        <div class="card">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input class="input" id="fingerprint-name" placeholder="Confirmed ad name" style="flex:1;min-width:160px">
+            <input class="input-sm" id="fingerprint-seconds" type="number" min="3" max="120" value="10" style="width:64px">
+            <button onclick="enrollFingerprint()">Enroll recent audio</button>
+            <a href="/api/ml/dataset/export" style="color:var(--green);font-size:0.78rem">Export training CSV</a>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text3);margin-top:7px">Enrollment is explicit; suspected commercials are never trusted automatically.</div>
+          <div id="fingerprint-list" style="margin-top:10px;font-size:0.76rem;color:var(--text3)"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Hybrid Diagnostics</div>
+        <div class="card" id="detector-diagnostics" style="font-size:0.76rem;color:var(--text3)">No detector data yet.</div>
       </div>
 
       <div class="section">
@@ -539,7 +668,7 @@ select:focus, .input:focus { border-color: var(--accent); }
 
   <!-- TUNE: labeling, thresholds, model, settings -->
   <div class="main cols-2" id="tab-tune" style="display:none">
-    <div class="panel">
+    <div class="panel" id="settings-tuning-panel">
       <div class="section">
         <div class="section-title">Tune Thresholds</div>
         <div class="card">
@@ -566,7 +695,40 @@ select:focus, .input:focus { border-color: var(--accent); }
     <div class="panel">
       <div class="section">
         <div class="section-title">Settings</div>
-        <div class="card">
+        <div class="segmented" style="margin-bottom:10px" aria-label="Settings level">
+          <button id="settings-level-basic" class="active" onclick="setSettingsLevel('basic')">Basic</button>
+          <button id="settings-level-advanced" onclick="setSettingsLevel('advanced')">Advanced</button>
+        </div>
+        <div class="card" id="settings-basic">
+          <div class="setting-row"><span class="setting-name">Channel profile</span>
+            <select id="basic-profile-select" onchange="syncBasicProfile()"><option value="">Select a profile…</option></select>
+          </div>
+          <div class="setting-row"><span class="setting-name">Detection mode</span>
+            <select id="basic-detection-mode"><option value="legacy">Legacy</option><option value="hybrid">Hybrid</option></select>
+          </div>
+          <div class="setting-row" style="display:block">
+            <div style="display:flex;justify-content:space-between"><span class="setting-name">Sensitivity</span><strong id="sensitivity-label">Balanced</strong></div>
+            <div class="range-row"><span>Safer</span><input id="sensitivity-slider" type="range" min="0" max="2" step="1" value="1" oninput="sensitivityChanged()"><span>Faster</span></div>
+            <div id="custom-overrides" class="custom-warning hidden">Advanced overrides are active. Moving this slider will replace detector thresholds with a preset.</div>
+          </div>
+          <label class="setting-row"><span class="setting-name">Automatic muting</span><input type="checkbox" id="basic-auto-muting"></label>
+          <label class="setting-row"><span class="setting-name">Start in shadow mode</span><input type="checkbox" id="basic-shadow"></label>
+          <div class="settings-actions">
+            <button onclick="cancelSettings()">Cancel</button>
+            <button class="btn-accent" onclick="saveBasicSettings()">Save basic settings</button>
+          </div>
+        </div>
+        <div class="card" id="settings-devices">
+          <div class="subhead" style="margin-top:0">Devices</div>
+          <div class="device-list">
+            <label>Capture device<select id="capture-device-select" onchange="saveSelectedCapture()"><option>Scan to find devices</option></select></label>
+            <button onclick="scanCaptureDevices()">Scan capture devices</button>
+            <label>Apple TV<select id="appletv-device-select"><option>Scan to find Apple TVs</option></select></label>
+            <div class="btn-group"><button onclick="scanAppleTVs()">Scan Apple TVs</button><button onclick="beginAppleTVPair()">Pair selected</button></div>
+          </div>
+        </div>
+        <div class="card" id="settings-advanced">
+          <div class="subhead" style="margin-top:0">Detector presets</div>
           <div class="setting-row" style="align-items:flex-start">
             <span class="setting-name">Preset</span>
             <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
@@ -576,6 +738,7 @@ select:focus, .input:focus { border-color: var(--accent); }
             </div>
           </div>
           <div style="font-size:0.72rem;color:var(--text3);margin:-4px 0 8px">Conservative risks a little ad bleed · Aggressive risks clipping game.</div>
+          <div class="subhead">Video detection</div>
           <div class="setting-row"><span class="setting-name">First Skip</span><input class="input-sm" type="number" id="set-first-skip" min="1" max="10" step="1"></div>
           <div class="setting-row"><span class="setting-name">Next Skip</span><input class="input-sm" type="number" id="set-subsequent-skip" min="1" max="4" step="1"></div>
           <div class="setting-row"><span class="setting-name">Settle Time</span><input class="input-sm" type="number" id="set-settle-time" min="0.1" max="10" step="0.1"></div>
@@ -587,6 +750,7 @@ select:focus, .input:focus { border-color: var(--accent); }
           <div class="setting-row s-color"><span class="setting-name">Color Recovery</span><input class="input-sm" type="number" id="set-color-recovery" min="0.1" max="0.99" step="0.05"></div>
           <div class="setting-row s-color"><span class="setting-name">Color Debounce</span><input class="input-sm" type="number" id="set-color-debounce" min="1" max="60" step="1"></div>
           <div class="setting-row s-color"><span class="setting-name">Color Recovery Debounce</span><input class="input-sm" type="number" id="set-color-recovery-debounce" min="1" max="60" step="1"></div>
+          <div class="subhead">Intervention &amp; safety</div>
           <div class="setting-row"><span class="setting-name">Mute Steps</span><input class="input-sm" type="number" id="set-mute-steps" min="1" max="20" step="1"></div>
           <div class="setting-row"><span class="setting-name">Unmute Steps</span><input class="input-sm" type="number" id="set-unmute-steps" min="1" max="20" step="1"></div>
           <div class="setting-row"><span class="setting-name">Mode</span>
@@ -596,9 +760,31 @@ select:focus, .input:focus { border-color: var(--accent); }
           </div>
           <div class="setting-row"><span class="setting-name">Safety Timeout</span><input class="input-sm" type="number" id="set-max-commercial" min="30" max="600" step="30"></div>
           <div class="setting-row"><span class="setting-name">Re-entry Cooldown (s)</span><input class="input-sm" type="number" id="set-reentry-cooldown" min="0" max="120" step="5"></div>
+          <div class="setting-row"><span class="setting-name">Manual Override Cooldown (s)</span><input class="input-sm" type="number" id="set-manual-override-cooldown" min="0" max="600" step="10"></div>
           <div class="setting-row"><span class="setting-name">Re-entry Debounce</span><input class="input-sm" type="number" id="set-reentry-debounce" min="1" max="100" step="1"></div>
           <div class="setting-row"><span class="setting-name">Calibration Duration (s)</span><input class="input-sm" type="number" id="set-calibration-duration" min="5" max="300" step="5"></div>
-          <button class="btn-accent btn-full" style="margin-top:12px" onclick="saveSettings()">Apply<span id="settings-status" style="display:none"> &check;</span></button>
+          <div class="subhead">Hybrid subsystems</div>
+          <div class="setting-row"><span class="setting-name">Hybrid Visual</span><input type="checkbox" id="set-hybrid-visual"></div>
+          <div class="setting-row"><span class="setting-name">Audio Transitions</span><input type="checkbox" id="set-audio-transition"></div>
+          <div class="setting-row"><span class="setting-name">Audio device name</span><input class="input" id="set-audio-device" style="width:180px"></div>
+          <div class="setting-row"><span class="setting-name">Audio transition threshold</span><input class="input-sm" type="number" id="set-audio-threshold" min="0" max="1" step="0.05"></div>
+          <div class="setting-row"><span class="setting-name">Audio Fingerprints</span><input type="checkbox" id="set-audio-fingerprint"></div>
+          <div class="setting-row"><span class="setting-name">Fingerprint threshold</span><input class="input-sm" type="number" id="set-fingerprint-threshold" min="0" max="1" step="0.05"></div>
+          <div class="setting-row"><span class="setting-name">Ad labels &amp; countdowns</span><input type="checkbox" id="set-ad-overlay"></div>
+          <div style="font-size:0.7rem;color:var(--text3);margin-top:2px">OCR flags explicit ad labels; timers by themselves are ignored to protect sports and live programming.</div>
+          <div class="setting-row"><span class="setting-name">ML Classifier</span><input type="checkbox" id="set-ml-classifier"></div>
+          <div class="setting-row"><span class="setting-name">ML program / commercial</span><span><input class="input-sm" type="number" id="set-ml-program" min="0" max="1" step="0.05"> / <input class="input-sm" type="number" id="set-ml-commercial" min="0" max="1" step="0.05"></span></div>
+          <div class="subhead">Fusion</div>
+          <div class="setting-row"><span class="setting-name">Program exit / commercial enter</span><span><input class="input-sm" type="number" id="set-fusion-exit" min="0" max="1" step="0.05"> / <input class="input-sm" type="number" id="set-fusion-enter" min="0" max="1" step="0.05"></span></div>
+          <div class="setting-row"><span class="setting-name">Audio / fingerprint / overlay / ML weights</span><span><input class="input-sm" type="number" id="set-weight-audio" min="0" max="10" step="0.1"> / <input class="input-sm" type="number" id="set-weight-fingerprint" min="0" max="10" step="0.1"> / <input class="input-sm" type="number" id="set-weight-ad-overlay" min="0" max="10" step="0.1"> / <input class="input-sm" type="number" id="set-weight-ml" min="0" max="10" step="0.1"></span></div>
+          <div style="font-size:0.7rem;color:var(--text3);margin-top:6px">Detector changes apply the next time the engine starts.</div>
+          <div class="settings-actions">
+            <button onclick="cancelSettings()">Cancel</button>
+            <button onclick="resetSettings()">Reset</button>
+            <button class="btn-accent" onclick="saveSettings()">Apply<span id="settings-status" style="display:none"> &check;</span></button>
+          </div>
+          <div class="btn-group" style="margin-top:10px"><button onclick="exportSettings()">Export</button><button onclick="document.getElementById('settings-import').click()">Import</button></div>
+          <input id="settings-import" type="file" accept="application/json" class="hidden" onchange="importSettings(this)">
         </div>
       </div>
 
@@ -657,34 +843,238 @@ select:focus, .input:focus { border-color: var(--accent); }
   </div>
   </div>
   <!-- /SETUP -->
+
+  <div class="main" id="tab-activity" style="display:none">
+    <div class="panel" style="grid-column:1/-1;max-width:920px;width:100%;margin:auto">
+      <div class="section-title">Activity timeline</div>
+      <div class="card">
+        <div style="color:var(--text3);font-size:.78rem;margin-bottom:8px">Detector transitions, actions, and your corrections appear here with their reason and evidence.</div>
+        <div id="activity-list">No activity yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main cols-2" id="tab-diagnostics" style="display:none">
+    <div class="panel">
+      <div class="section-title">Detector health</div>
+      <div class="card" id="detector-diagnostics-page">No detector data yet.</div>
+      <div class="section-title" style="margin-top:18px">Connection</div>
+      <div class="card" id="network-details">Loading local network details…</div>
+    </div>
+    <div class="panel">
+      <div class="section-title">Trusted devices</div>
+      <div class="card"><div id="trusted-devices">Local access does not require pairing.</div></div>
+      <div class="section-title" style="margin-top:18px">Install on phone</div>
+      <div class="card">
+        <img id="network-qr" src="/api/network/qr" alt="QR code for the local dashboard" style="width:min(240px,100%);background:#fff;padding:8px;border-radius:8px;display:block;margin:auto">
+        <div style="font-size:.75rem;color:var(--text3);margin-top:10px">Open the LAN URL, pair this device, then use your browser’s Add to Home Screen command.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav" aria-label="Primary navigation">
+  <button id="bottom-btn-watch" class="active" onclick="showTab('watch')">⌂<br>Home</button>
+  <button id="bottom-btn-activity" onclick="showTab('activity')">≡<br>Activity</button>
+  <button id="bottom-btn-setup" onclick="showTab('setup')">◎<br>Calibrate</button>
+  <button id="bottom-btn-tune" onclick="showTab('tune')">⚙<br>Settings</button>
+  <button id="bottom-btn-diagnostics" onclick="showTab('diagnostics')">◇<br>Diagnostics</button>
+  <a id="bottom-btn-help" href="/help">?<br>Help</a>
+</nav>
+
+<div id="pair-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="pair-title">
+  <div class="modal">
+    <h2 id="pair-title">Pair with The Clicker</h2>
+    <p>Enter the six-digit code shown in the Clicker host terminal. This creates a revocable trusted-device session.</p>
+    <input class="input" id="dashboard-pair-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+    <input class="input" id="dashboard-device-name" maxlength="80" placeholder="Device name, e.g. Andrew’s iPhone">
+    <button class="btn-accent btn-full" onclick="pairDashboard()">Pair this device</button>
+  </div>
+</div>
+
+<div id="appletv-pair-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2>Pair Apple TV</h2>
+    <p id="appletv-pair-help">Enter the PIN shown on the Apple TV.</p>
+    <input class="input" id="appletv-pin" inputmode="numeric" placeholder="PIN">
+    <div class="btn-group"><button onclick="closeAppleTVPair()">Cancel</button><button class="btn-accent" onclick="finishAppleTVPair()">Finish pairing</button></div>
+  </div>
+</div>
+
+<div id="setup-wizard" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+  <div class="modal">
+    <h2 id="wizard-title">Set up The Clicker</h2>
+    <div id="wizard-progress" class="wizard-progress"></div>
+    <div id="wizard-content"></div>
+    <div class="btn-group" style="margin-top:18px"><button id="wizard-back" onclick="wizardMove(-1)">Back</button><button class="btn-accent" id="wizard-next" onclick="wizardMove(1)">Next</button></div>
+  </div>
 </div>
 
 <script>
-const POLL_MS=1000;let polling=null,currentChannel=null,lastError=null;
+const POLL_MS=1000;let polling=null,currentChannel=null,lastError=null,csrfToken=null,connectionFailures=0,lastCorrectionId=null,settingsSnapshot=null,settingsSnapshotProfile='',sensitivityDirty=false,pendingAppleTVPair=null,wizardAppleTVPairs={Companion:null,AirPlay:null},wizardStep=0;
 
-async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);const r=await fetch(p,o);if(!r.ok){const d=(await r.json().catch(()=>({}))).detail||r.statusText;throw new Error(d)}return r.json()}
+async function api(m,p,b){const headers={'Content-Type':'application/json'};if(csrfToken&&!['GET','HEAD'].includes(m))headers['X-CSRF-Token']=csrfToken;const o={method:m,headers};if(b!==undefined)o.body=JSON.stringify(b);const r=await fetch(p,o);if(r.status===401&&p!=='/api/auth/pair'){document.getElementById('pair-modal').classList.remove('hidden')}if(!r.ok){const d=(await r.json().catch(()=>({}))).detail||r.statusText;throw new Error(d)}return r.status===204?{}:r.json()}
 function showBanner(m,t='error'){const e=document.getElementById('banner');e.textContent=m;e.className='banner '+t;e.style.display='block';setTimeout(()=>{e.style.display='none'},6000)}
 function showError(m){showBanner(m,'error')}
 function showSuccess(m){showBanner(m,'success')}
 
-async function startEngine(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch})}catch(e){showError(e.message)}}
-async function startShadow(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:true})}catch(e){showError(e.message)}}
+async function initializeAuth(){try{const r=await api('GET','/api/auth/status');csrfToken=r.csrf_token||null;document.getElementById('pair-modal').classList.toggle('hidden',!r.required||r.authenticated);return !r.required||r.authenticated}catch(e){document.getElementById('pair-modal').classList.remove('hidden');return false}}
+async function pairDashboard(){const code=document.getElementById('dashboard-pair-code').value.trim(),device_name=document.getElementById('dashboard-device-name').value.trim()||navigator.platform||'Browser';try{const r=await api('POST','/api/auth/pair',{code,device_name});csrfToken=r.csrf_token;document.getElementById('pair-modal').classList.add('hidden');showSuccess('This device is now trusted.');await initializeDashboard()}catch(e){showError(e.message)}}
+
+function selectedDetectionMode(){return document.getElementById('detection-mode').value||'legacy'}
+async function startEngine(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:localStorage.getItem('startShadow')==='true',detection_mode:selectedDetectionMode()})}catch(e){showError(e.message)}}
+async function startShadow(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:true,detection_mode:selectedDetectionMode()})}catch(e){showError(e.message)}}
 async function stopEngine(){try{await api('POST','/api/stop')}catch(e){showError(e.message)}}
 async function toggleEngine(){try{await api('POST','/api/toggle')}catch(e){showError(e.message)}}
 async function disarm(){try{await api('POST','/api/disarm');showSuccess('Disarmed.')}catch(e){showError(e.message)}}
+async function manualVolume(action){try{await api('POST','/api/control/'+action);showSuccess(action==='mute'?'Muted.':'Volume restored.')}catch(e){showError(e.message)}}
+async function correctNow(label){try{const r=await api('POST','/api/corrections',{label,action:'none'});lastCorrectionId=r.correction.id;const box=document.getElementById('correction-undo');box.classList.remove('hidden');box.firstChild.textContent=(r.created?'Label saved. ':'Already saved. ');setTimeout(()=>box.classList.add('hidden'),8000);await loadActivity()}catch(e){showError(e.message)}}
+async function undoLastCorrection(){if(!lastCorrectionId)return;try{await api('POST','/api/corrections/'+encodeURIComponent(lastCorrectionId)+'/undo');document.getElementById('correction-undo').classList.add('hidden');showSuccess('Correction undone.');await loadActivity()}catch(e){showError(e.message)}}
+
+function captureCheckResult(r){
+  if(r.found&&r.frame){
+    return {ok:true,message:'Capture card OK: "'+r.device_name+'" at index '+r.index+(r.resolution?' ('+r.resolution+')':'')};
+  }
+  if(r.found){
+    return {ok:false,message:'Capture card found at index '+r.index+' but no signal. Check the HDMI connection.'+(r.error?' '+r.error:'')};
+  }
+  const devs=r.available_devices&&r.available_devices.length?' Available devices: '+r.available_devices.join(', ')+'.':'';
+  return {ok:false,message:'"'+r.device_name+'" was not found.'+devs};
+}
 
 async function checkCapture(){
+  const button=document.getElementById('btn-check-capture'),label=button&&button.textContent;
   try{
-    const r=await api('GET','/api/capture-check');
-    if(r.found&&r.frame){
-      showSuccess('Capture card OK: "'+r.device_name+'" at index '+r.index+' ('+r.resolution+')')
-    } else if(r.found&&!r.frame){
-      showError('Capture card found at index '+r.index+' but no signal. Check HDMI connection.')
-    } else {
-      const devs=r.available_devices?(' Available: '+r.available_devices.join(', ')):'';
-      showError('"'+r.device_name+'" not found.'+devs)
+    if(button){button.disabled=true;button.textContent='Checking...'}
+    const result=captureCheckResult(await api('GET','/api/capture-check'));
+    if(result.ok)showSuccess(result.message);else showError(result.message);
+    return result.ok;
+  }catch(e){showError('Check failed: '+e.message);return false}
+  finally{if(button){button.disabled=false;button.textContent=label}}
+}
+
+async function checkWizardCapture(){
+  const button=document.getElementById('wizard-capture-check'),status=document.getElementById('wizard-capture-status'),select=document.getElementById('wizard-capture-select');
+  if(!button||!status||!select||!select.value)return;
+  const option=select.options[select.selectedIndex];
+  button.disabled=true;
+  select.disabled=true;
+  button.textContent='Saving and checking...';
+  status.className='wizard-check-status checking';
+  status.textContent='Saving '+option.textContent+' and reading a video frame...';
+  try{
+    await api('POST','/api/devices/capture/select',{id:select.value,name:option.dataset.name||option.textContent});
+    const result=captureCheckResult(await api('GET','/api/capture-check'));
+    status.className='wizard-check-status '+(result.ok?'success':'error');
+    status.textContent=result.message;
+  }catch(e){
+    status.className='wizard-check-status error';
+    status.textContent='Check failed: '+e.message;
+  }finally{
+    select.disabled=false;
+    button.disabled=false;
+    button.textContent='Use and check';
+  }
+}
+
+async function scanWizardCaptureDevices(){
+  const select=document.getElementById('wizard-capture-select'),button=document.getElementById('wizard-capture-check'),status=document.getElementById('wizard-capture-status');
+  if(!select||!button||!status)return;
+  select.disabled=true;button.disabled=true;
+  status.className='wizard-check-status checking';status.textContent='Scanning video inputs...';
+  try{
+    const r=await api('GET','/api/devices/capture');
+    select.innerHTML='';
+    for(const device of r.devices){
+      const option=document.createElement('option');
+      option.value=device.id;option.dataset.name=device.name;option.textContent=device.name;
+      option.selected=device.id===r.selected||device.name===r.selected;
+      select.appendChild(option);
     }
-  }catch(e){showError('Check failed: '+e.message)}
+    if(r.devices.length){
+      select.disabled=false;button.disabled=false;
+      status.className='wizard-check-status';status.textContent='';
+    }else{
+      select.innerHTML='<option value="">No video inputs found</option>';
+      status.className='wizard-check-status error';status.textContent='No video inputs were found. Connect the capture card, allow camera access, then refresh.';
+    }
+  }catch(e){
+    select.innerHTML='<option value="">Unable to scan devices</option>';
+    status.className='wizard-check-status error';status.textContent='Device scan failed: '+e.message;
+  }
+}
+
+function wizardPairIds(protocol){
+  const slug=protocol==='Companion'?'auth':'airplay';
+  return {start:'wizard-'+slug+'-start',controls:'wizard-'+slug+'-controls',pin:'wizard-'+slug+'-pin',finish:'wizard-'+slug+'-finish',status:'wizard-'+slug+'-status'};
+}
+
+function resetWizardAppleTVPairing(){
+  wizardAppleTVPairs={Companion:null,AirPlay:null};
+  for(const protocol of ['Companion','AirPlay']){
+    const ids=wizardPairIds(protocol),controls=document.getElementById(ids.controls),status=document.getElementById(ids.status),start=document.getElementById(ids.start);
+    if(controls)controls.classList.add('hidden');
+    if(status){status.className='wizard-pair-status';status.textContent='Not paired yet.'}
+    if(start){start.disabled=false;start.textContent=protocol==='Companion'?'Start authentication':'Start AirPlay pairing'}
+  }
+}
+
+async function scanWizardAppleTVs(){
+  const select=document.getElementById('wizard-appletv-select'),refresh=document.getElementById('wizard-appletv-refresh'),status=document.getElementById('wizard-appletv-scan-status');
+  if(!select||!refresh||!status)return;
+  select.disabled=true;refresh.disabled=true;status.className='wizard-check-status checking';status.textContent='Searching the local network for Apple TVs...';
+  try{
+    const r=await api('GET','/api/devices/appletv');
+    select.innerHTML='';
+    for(const device of r.devices){
+      const option=document.createElement('option');
+      option.value=device.id;option.textContent=device.name+' · '+device.address;option.selected=device.id===r.selected;
+      select.appendChild(option);
+    }
+    if(r.devices.length){
+      select.disabled=false;status.className='wizard-check-status';status.textContent='';
+      resetWizardAppleTVPairing();
+    }else{
+      select.innerHTML='<option value="">No Apple TVs found</option>';
+      status.className='wizard-check-status error';status.textContent='No Apple TVs were found. Make sure this Mac and the Apple TV are on the same network.';
+    }
+  }catch(e){
+    select.innerHTML='<option value="">Unable to scan Apple TVs</option>';
+    status.className='wizard-check-status error';status.textContent='Apple TV scan failed: '+e.message;
+  }finally{refresh.disabled=false}
+}
+
+async function beginWizardAppleTVPair(protocol){
+  const select=document.getElementById('wizard-appletv-select'),ids=wizardPairIds(protocol),start=document.getElementById(ids.start),controls=document.getElementById(ids.controls),pin=document.getElementById(ids.pin),finish=document.getElementById(ids.finish),status=document.getElementById(ids.status);
+  if(!select||!select.value||!start||!controls||!pin||!finish||!status)return;
+  start.disabled=true;status.className='wizard-pair-status';status.textContent='Starting '+(protocol==='Companion'?'authentication':'AirPlay pairing')+'...';
+  try{
+    const pending=await api('POST','/api/devices/appletv/pair/start',{identifier:select.value,protocol});
+    wizardAppleTVPairs[protocol]=pending;controls.classList.remove('hidden');
+    pin.value='';pin.classList.toggle('hidden',!pending.device_provides_pin);
+    finish.textContent=pending.device_provides_pin?'Submit code':'Finish pairing';
+    status.textContent=pending.device_provides_pin
+      ?'Enter the code shown on the Apple TV, then submit it here.'
+      :'Enter '+pending.pin_code+' on the Apple TV, then finish pairing here.';
+    if(pending.device_provides_pin)pin.focus();
+    start.textContent='Restart '+(protocol==='Companion'?'authentication':'AirPlay pairing');
+  }catch(e){
+    status.className='wizard-pair-status error';status.textContent='Could not start pairing: '+e.message;
+  }finally{start.disabled=false}
+}
+
+async function finishWizardAppleTVPair(protocol){
+  const pending=wizardAppleTVPairs[protocol],ids=wizardPairIds(protocol),pin=document.getElementById(ids.pin),finish=document.getElementById(ids.finish),status=document.getElementById(ids.status),controls=document.getElementById(ids.controls);
+  if(!pending||!pin||!finish||!status||!controls)return;
+  const value=pin.value.trim();
+  if(pending.device_provides_pin&&!/^\d{4,8}$/.test(value)){status.className='wizard-pair-status error';status.textContent='Enter the 4–8 digit code shown on the Apple TV.';pin.focus();return}
+  finish.disabled=true;status.className='wizard-pair-status';status.textContent='Submitting code...';
+  try{
+    await api('POST','/api/devices/appletv/pair/finish',{token:pending.token,pin:value?Number(value):null});
+    wizardAppleTVPairs[protocol]=null;controls.classList.add('hidden');status.className='wizard-pair-status success';status.textContent=(protocol==='Companion'?'Authentication and remote control':'AirPlay')+' paired successfully.';
+  }catch(e){
+    status.className='wizard-pair-status error';status.textContent='Pairing failed: '+e.message;
+  }finally{finish.disabled=false}
 }
 
 async function calibrate(){const b=document.getElementById('btn-calibrate');try{b.disabled=true;b.textContent='Calibrating...';const ch=document.getElementById('channel-select').value||null;const r=await api('POST','/api/calibrate',{channel:ch});showSuccess('Done: '+r.channel);await loadProfileDetails(r.channel)}catch(e){showError(e.message)}finally{b.disabled=false;b.textContent='Recalibrate'}}
@@ -710,9 +1100,11 @@ async function loadProfileDetails(ch){try{const d=await api('GET','/api/profile/
   if(isColor||isCombo)boxLivePal.classList.remove('hidden');
 }catch(e){document.getElementById('cal-no-profile').classList.remove('hidden');document.getElementById('cal-details').classList.add('hidden')}}
 
-async function refreshLivePalette(){const box=document.getElementById('box-live-palette');if(box.classList.contains('hidden'))return;try{const d=await api('GET','/api/live-palette');document.getElementById('img-live-palette').src='data:image/jpeg;base64,'+d.palette_b64;const m=document.getElementById('live-palette-match');if(d.match!==null&&d.match!==undefined){const ok=d.match>=d.threshold;m.textContent=', '+d.match.toFixed(2)+(ok?' ✓':' ✗');m.style.color=ok?'var(--green)':'var(--accent)'}else{m.textContent=''}}catch(e){}}
+async function refreshLivePalette(){const box=document.getElementById('box-live-palette');if(!engineRunning||box.classList.contains('hidden'))return;try{const d=await api('GET','/api/live-palette');document.getElementById('img-live-palette').src='data:image/jpeg;base64,'+d.palette_b64;const m=document.getElementById('live-palette-match');if(d.match!==null&&d.match!==undefined){const ok=d.match>=d.threshold;m.textContent=', '+d.match.toFixed(2)+(ok?' ✓':' ✗');m.style.color=ok?'var(--green)':'var(--accent)'}else{m.textContent=''}}catch(e){}}
 
-async function loadProfiles(){try{const d=await api('GET','/api/profiles');const s=document.getElementById('channel-select');while(s.options.length>1)s.remove(1);for(const p of d.profiles){const o=document.createElement('option');o.value=p;o.textContent=p.toUpperCase();s.appendChild(o)}}catch(e){}}
+async function loadProfiles(){try{const d=await api('GET','/api/profiles');for(const id of ['channel-select','basic-profile-select']){const s=document.getElementById(id);while(s.options.length>1)s.remove(1);for(const p of d.profiles){const o=document.createElement('option');o.value=p;o.textContent=p.toUpperCase();s.appendChild(o)}}const saved=localStorage.getItem('selectedProfile')||'';if(d.profiles.includes(saved)){document.getElementById('channel-select').value=saved;document.getElementById('basic-profile-select').value=saved;await previewProfile()}}catch(e){}}
+function syncBasicProfile(){const value=document.getElementById('basic-profile-select').value;document.getElementById('channel-select').value=value;previewProfile()}
+function syncHomeProfile(){const value=document.getElementById('channel-select').value;localStorage.setItem('selectedProfile',value);document.getElementById('basic-profile-select').value=value;previewProfile()}
 
 function fmtDate(iso){
   if(!iso)return '--';
@@ -740,7 +1132,7 @@ async function previewProfile(){
 async function applyProfile(){
   const ch=document.getElementById('channel-select').value;
   if(!ch){showError('Select a profile first.');return}
-  try{await api('POST','/api/start',{channel:ch});showSuccess('Started with '+ch.toUpperCase())}
+  try{await api('POST','/api/start',{channel:ch,detection_mode:selectedDetectionMode()});showSuccess('Started with '+ch.toUpperCase())}
   catch(e){showError(e.message)}
 }
 
@@ -757,14 +1149,30 @@ async function deleteProfile(){
 }
 
 function confColor(v,t){return v>=t?'var(--green)':'var(--red)'}
+function esc(v){return String(v===undefined||v===null?'--':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderDetectorDiagnostics(s){
+  const rows=(s.detector_results||[]).map(r=>{const d=r.diagnostics||{},overlay=r.detector_name==='ad_overlay'?(d.explicit_ad_label?' · flag: '+esc(d.ocr_text)+(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · '+esc(d.countdown_seconds)+'s left':''):(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · timer ignored without ad label':' · '+esc(d.reason||''))):'';return '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text2)">'+esc(r.detector_name)+'</strong> · '+esc(r.classification)+' · '+Number(r.confidence||0).toFixed(3)+' <span style="opacity:.7">('+esc(r.confidence_kind)+')</span>'+(r.available?'':' · unavailable: '+esc(d.reason))+overlay+'</div>'}).join('');
+  const fused=s.fused_result?'<div style="padding:7px 0;color:var(--green)"><strong>Fused</strong> · '+esc(s.fused_result.classification)+' · '+Number(s.fused_result.confidence||0).toFixed(3)+'</div>':'<div style="padding:7px 0">Fused: legacy mode</div>';
+  const legacy=(s.detector_results||[]).find(r=>r.detector_name==='legacy_visual');
+  const compare=s.shadow_mode&&legacy?'<div style="padding:5px 0"><strong>Shadow comparison</strong> · legacy '+esc(legacy.classification)+' / hybrid '+esc(s.fused_result?s.fused_result.classification:'not active')+'</div>':'';
+  const audio='<div style="padding:5px 0">Audio: '+esc(s.audio&&s.audio.available?'available':(s.audio&&s.audio.error)||'unavailable')+' · Fingerprint: '+esc(s.fingerprint&&s.fingerprint.latest&&s.fingerprint.latest.matched?'matched':(s.fingerprint&&s.fingerprint.available?'no match':'unavailable'))+' · ML: '+esc(s.ml&&s.ml.loaded?('loaded '+(s.ml.version||'')):(s.ml&&s.ml.error)||'unavailable')+'</div>';
+  const events=(s.recent_events||[]).slice(-5).reverse().map(e=>'<div>'+new Date(e.t*1000).toLocaleTimeString()+' · '+esc(e.type)+(e.reason?' · '+esc(e.reason):'')+'</div>').join('');
+  const html=rows+fused+compare+audio+(events?'<div style="margin-top:7px"><strong style="color:var(--text2)">Recent actions</strong>'+events+'</div>':'');
+  for(const id of ['detector-diagnostics','detector-diagnostics-page']){const box=document.getElementById(id);if(box)box.innerHTML=html}
+}
 
-let pollInFlight=false;
+let pollInFlight=false,engineRunning=false;
 async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   const s=await api('GET','/api/status');
+  connectionFailures=0;document.body.classList.remove('connection-lost');document.getElementById('connection-status').classList.remove('show');
+  renderDetectorDiagnostics(s);
   const t=parseFloat(document.getElementById('set-threshold').value)||0.35;
   const badge=document.getElementById('engine-badge');
   const running=['running','disabled'].includes(s.engine_state);
-  const isCommercial=s.detection_state==='commercial';
+  engineRunning=running;
+  if(running)document.getElementById('detection-mode').value=s.detection_mode||'legacy';
+  document.getElementById('detection-mode').disabled=running;
+  const isCommercial=running&&s.detection_state==='commercial';
 
   // Badge
   if(s.engine_state==='running'){badge.textContent='Active';badge.className='badge badge-green'}
@@ -775,8 +1183,9 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   // Hero
   document.getElementById('s-engine-label').textContent=s.engine_state==='stopped'?'Engine Stopped':s.engine_state==='running'?'Detecting':s.engine_state==='disabled'?'Monitoring Only':s.engine_state==='error'?'Engine Error':s.engine_state;
   const dot=document.getElementById('hero-dot');
-  dot.style.background=isCommercial?'var(--red)':'var(--green)';dot.style.color=isCommercial?'var(--red)':'var(--green)';
-  document.getElementById('s-detection').innerHTML='<span class="hero-dot" id="hero-dot" style="background:'+(isCommercial?'var(--red)':'var(--green)')+';color:'+(isCommercial?'var(--red)':'var(--green)')+'"></span>'+(s.detection_state==='watching'?'Watching':s.detection_state==='commercial'?'Commercial':'Idle');
+  const stateColor=!running?'var(--text3)':(isCommercial?'var(--red)':'var(--green)'),stateLabel=!running?'Idle':(s.detection_state==='watching'?'Watching':s.detection_state==='commercial'?'Commercial':'Idle');
+  dot.style.background=stateColor;dot.style.color=stateColor;
+  document.getElementById('s-detection').innerHTML='<span class="hero-dot" id="hero-dot" style="background:'+stateColor+';color:'+stateColor+'"></span>'+stateLabel;
   const ch=s.channel?s.channel.toUpperCase():'';const mode=s.mode?' \u00b7 '+s.mode:'';
   document.getElementById('s-channel').textContent=ch+mode;
 
@@ -802,7 +1211,7 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   document.getElementById('btn-stop').disabled=!running;
   document.getElementById('btn-disarm').disabled=!running;
   document.getElementById('btn-toggle').disabled=!running;
-  document.getElementById('btn-toggle').textContent=s.engine_state==='running'?'Disable':'Enable';
+  document.getElementById('btn-toggle').textContent=s.engine_state==='running'?'Pause':'Resume';
 
   // State aware visibility: show start actions when stopped, run actions when running
   document.getElementById('ctl-start-group').style.display=running?'none':'';
@@ -826,14 +1235,14 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   try{const st=await api('GET','/api/stats');document.getElementById('stat-commercials').textContent=st.commercials_detected;document.getElementById('stat-skips').textContent=st.skips;document.getElementById('stat-mutes').textContent=st.mutes;document.getElementById('stat-time-saved').textContent=st.time_saved_min+'m';document.getElementById('stat-session-dur').textContent=Math.round(st.session_duration/60)+'m'}catch(e){}
 
   if(s.channel&&s.channel!==currentChannel){currentChannel=s.channel;await loadProfileDetails(s.channel)}
-}catch(e){}finally{pollInFlight=false}}
+}catch(e){connectionFailures++;if(connectionFailures>=2){document.body.classList.add('connection-lost');document.getElementById('connection-status').classList.add('show')}}finally{pollInFlight=false}}
 
 // Chart
 // One Chart.js instance per canvas: Chart.js can't render a single instance
 // into two canvases, and the Watch and Tune tabs each want the timeline.
 let timelineCharts=[];
 const TIMELINE_CANVASES=['timeline-chart','timeline-chart-tune'];
-function makeChart(canvasId){const el=document.getElementById(canvasId);if(!el)return null;const ctx=el.getContext('2d');return new Chart(ctx,{type:'line',data:{datasets:[
+function makeChart(canvasId){const el=document.getElementById(canvasId);if(!el||typeof Chart==='undefined')return null;const ctx=el.getContext('2d');return new Chart(ctx,{type:'line',data:{datasets:[
 {label:'Logo (template)',data:[],borderColor:'rgba(139,173,138,0.85)',borderWidth:1.5,pointRadius:0,tension:0.3,fill:{target:'origin',above:'rgba(139,173,138,0.05)'}},
 {label:'Logo (edge)',data:[],borderColor:'rgba(212,184,112,0.45)',borderWidth:1,pointRadius:0,tension:0.3},
 {label:'Color',data:[],borderColor:'rgba(212,113,74,0.85)',borderWidth:1.5,pointRadius:0,tension:0.3}
@@ -870,19 +1279,27 @@ ch.options.plugins.annotation.annotations=ann;ch.update('none')}
 }catch(e){}}
 
 // Settings
-const SM={'set-first-skip':'FIRST_SKIP_COUNT','set-subsequent-skip':'SUBSEQUENT_SKIP_COUNT','set-settle-time':'SKIP_SETTLE_TIME','set-threshold':'LOGO_MATCH_THRESHOLD','set-logo-recovery':'LOGO_RECOVERY_THRESHOLD','set-debounce':'DEBOUNCE_FRAMES','set-recovery-debounce':'RECOVERY_DEBOUNCE_FRAMES','set-color-threshold':'COLOR_MATCH_THRESHOLD','set-color-recovery':'COLOR_RECOVERY_THRESHOLD','set-color-debounce':'COLOR_DEBOUNCE_FRAMES','set-color-recovery-debounce':'COLOR_RECOVERY_DEBOUNCE_FRAMES','set-mute-steps':'MUTE_STEPS','set-unmute-steps':'UNMUTE_STEPS','set-mode-override':'PLAYBACK_MODE_OVERRIDE','set-max-commercial':'MAX_COMMERCIAL_DURATION','set-reentry-cooldown':'REENTRY_COOLDOWN_SECONDS','set-reentry-debounce':'REENTRY_DEBOUNCE_FRAMES','set-calibration-duration':'CALIBRATION_DURATION'};
-async function loadSettings(){try{const d=await api('GET','/api/settings');for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el||d[k]===undefined)continue;if(el.type==='checkbox')el.checked=!!d[k];else el.value=d[k]}}catch(e){}}
-async function saveSettings(){const s={};for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el)continue;s[k]=k==='PLAYBACK_MODE_OVERRIDE'?el.value:(el.type==='checkbox'?el.checked:parseFloat(el.value))}try{await api('POST','/api/settings',s);const st=document.getElementById('settings-status');st.style.display='inline';setTimeout(()=>{st.style.display='none'},2000)}catch(e){showError(e.message)}}
+const SM={'set-first-skip':'FIRST_SKIP_COUNT','set-subsequent-skip':'SUBSEQUENT_SKIP_COUNT','set-settle-time':'SKIP_SETTLE_TIME','set-threshold':'LOGO_MATCH_THRESHOLD','set-logo-recovery':'LOGO_RECOVERY_THRESHOLD','set-debounce':'DEBOUNCE_FRAMES','set-recovery-debounce':'RECOVERY_DEBOUNCE_FRAMES','set-color-threshold':'COLOR_MATCH_THRESHOLD','set-color-recovery':'COLOR_RECOVERY_THRESHOLD','set-color-debounce':'COLOR_DEBOUNCE_FRAMES','set-color-recovery-debounce':'COLOR_RECOVERY_DEBOUNCE_FRAMES','set-mute-steps':'MUTE_STEPS','set-unmute-steps':'UNMUTE_STEPS','set-mode-override':'PLAYBACK_MODE_OVERRIDE','set-max-commercial':'MAX_COMMERCIAL_DURATION','set-reentry-cooldown':'REENTRY_COOLDOWN_SECONDS','set-manual-override-cooldown':'MANUAL_OVERRIDE_COOLDOWN_SECONDS','set-reentry-debounce':'REENTRY_DEBOUNCE_FRAMES','set-calibration-duration':'CALIBRATION_DURATION','set-hybrid-visual':'HYBRID_LEGACY_VISUAL_ENABLED','set-audio-transition':'AUDIO_TRANSITION_ENABLED','set-audio-fingerprint':'AUDIO_FINGERPRINT_ENABLED','set-ad-overlay':'AD_OVERLAY_ENABLED','set-ml-classifier':'ML_CLASSIFIER_ENABLED'};
+Object.assign(SM,{'set-audio-device':'AUDIO_DEVICE_NAME','set-audio-threshold':'AUDIO_TRANSITION_SCORE_THRESHOLD','set-fingerprint-threshold':'FINGERPRINT_MATCH_THRESHOLD','set-ml-program':'ML_PROGRAM_THRESHOLD','set-ml-commercial':'ML_COMMERCIAL_THRESHOLD','set-fusion-exit':'HYBRID_PROGRAM_EXIT_THRESHOLD','set-fusion-enter':'HYBRID_COMMERCIAL_ENTER_THRESHOLD','set-weight-audio':'HYBRID_AUDIO_TRANSITION_WEIGHT','set-weight-fingerprint':'HYBRID_FINGERPRINT_WEIGHT','set-weight-ad-overlay':'HYBRID_AD_OVERLAY_WEIGHT','set-weight-ml':'HYBRID_ML_WEIGHT'});
+async function loadSettings(){try{const d=await api('GET','/api/settings');settingsSnapshot=d;settingsSnapshotProfile=localStorage.getItem('selectedProfile')||'';document.getElementById('basic-profile-select').value=settingsSnapshotProfile;document.getElementById('channel-select').value=settingsSnapshotProfile;if(d.DETECTION_MODE){document.getElementById('detection-mode').value=d.DETECTION_MODE;document.getElementById('basic-detection-mode').value=d.DETECTION_MODE}document.getElementById('basic-auto-muting').checked=!!d.AUTOMATIC_MUTING_ENABLED;document.getElementById('basic-shadow').checked=localStorage.getItem('startShadow')==='true';const preset=d._meta&&d._meta.active_preset;const map={conservative:0,balanced:1,aggressive:2};document.getElementById('sensitivity-slider').value=preset in map?map[preset]:1;document.getElementById('custom-overrides').classList.toggle('hidden',!!preset);sensitivityDirty=false;sensitivityChanged(false);for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el||d[k]===undefined)continue;if(el.type==='checkbox')el.checked=!!d[k];else el.value=d[k]}}catch(e){showError(e.message)}}
+function sensitivityChanged(dirty=true){const names=['Conservative','Balanced','Aggressive'],value=Number(document.getElementById('sensitivity-slider').value);document.getElementById('sensitivity-label').textContent=names[value];if(dirty)sensitivityDirty=true}
+function setSettingsLevel(level){localStorage.setItem('settingsLevel',level);const advanced=level==='advanced';document.getElementById('settings-basic').classList.toggle('hidden',advanced);document.getElementById('settings-devices').classList.toggle('hidden',advanced);document.getElementById('settings-advanced').classList.toggle('hidden',!advanced);document.getElementById('settings-tuning-panel').classList.toggle('hidden',!advanced);document.getElementById('settings-level-basic').classList.toggle('active',!advanced);document.getElementById('settings-level-advanced').classList.toggle('active',advanced)}
+async function saveBasicSettings(){try{if(sensitivityDirty){const names=['conservative','balanced','aggressive'];await api('POST','/api/preset',{name:names[Number(document.getElementById('sensitivity-slider').value)]})}await api('POST','/api/settings',{DETECTION_MODE:document.getElementById('basic-detection-mode').value,AUTOMATIC_MUTING_ENABLED:document.getElementById('basic-auto-muting').checked});localStorage.setItem('startShadow',String(document.getElementById('basic-shadow').checked));localStorage.setItem('selectedProfile',document.getElementById('basic-profile-select').value);await loadSettings();showSuccess('Basic settings saved.')}catch(e){showError(e.message)}}
+async function cancelSettings(){await loadSettings();showSuccess('Unsaved changes discarded.')}
+async function saveSettings(){const s={DETECTION_MODE:selectedDetectionMode()};for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el)continue;s[k]=(k==='PLAYBACK_MODE_OVERRIDE'||el.type==='text')?el.value:(el.type==='checkbox'?el.checked:parseFloat(el.value))}try{await api('POST','/api/settings',s);await loadSettings();const st=document.getElementById('settings-status');st.style.display='inline';setTimeout(()=>{st.style.display='none'},2000)}catch(e){showError(e.message)}}
 async function applyPreset(name){try{const r=await api('POST','/api/preset',{name});await loadSettings();showSuccess('Applied '+name+' preset.')}catch(e){showError(e.message)}}
+async function resetSettings(){if(!confirm('Reset all settings to defaults?'))return;try{await api('POST','/api/settings/reset',{group:'all'});await loadSettings();showSuccess('Defaults restored.')}catch(e){showError(e.message)}}
+function exportSettings(){window.location.href='/api/settings/export'}
+async function importSettings(input){const file=input.files&&input.files[0];if(!file)return;try{const payload=JSON.parse(await file.text());await api('POST','/api/settings/import',payload);await loadSettings();showSuccess('Settings imported.')}catch(e){showError(e.message)}finally{input.value=''}}
 
 // Calibration canvas
-let snapshotImg=null,snapshotW=0,snapshotH=0,drawStart=null,drawEnd=null,selectedROI=null;
+let snapshotImg=null,snapshotW=0,snapshotH=0,drawStart=null,drawEnd=null,selectedROI=null,touchMode=null,touchOrigin=null,roiOrigin=null,pinchDistance=0,canvasZoom=1;
 
 function canvasCoord(c,cx,cy){const r=c.getBoundingClientRect();return{x:(cx-r.left)*(c.width/r.width),y:(cy-r.top)*(c.height/r.height)}}
 
 async function grabSnapshot(){try{const d=await api('GET','/api/snapshot');snapshotW=d.width;snapshotH=d.height;
 const c=document.getElementById('snapshot-canvas');const maxW=c.closest('.card').clientWidth-36||900;
-const dw=Math.min(maxW,snapshotW);const sc=dw/snapshotW;c.width=dw;c.height=Math.round(snapshotH*sc);c.dataset.scale=sc;
+const dw=Math.min(maxW,snapshotW);const sc=dw/snapshotW;c.width=dw;c.height=Math.round(snapshotH*sc);c.dataset.scale=sc;c.style.width='100%';canvasZoom=1;
 snapshotImg=new Image();snapshotImg.onload=()=>{c.getContext('2d').drawImage(snapshotImg,0,0,c.width,c.height)};
 snapshotImg.src='data:image/jpeg;base64,'+d.frame_b64;document.getElementById('snapshot-container').classList.remove('hidden');
 selectedROI=null;drawStart=null;drawEnd=null;document.getElementById('btn-save-profile').disabled=true;document.getElementById('btn-save-combo').disabled=true;document.getElementById('cal-roi-info').classList.add('hidden')}catch(e){showError(e.message)}}
@@ -892,15 +1309,18 @@ c.addEventListener('mousedown',e=>{drawStart=canvasCoord(c,e.clientX,e.clientY);
 c.addEventListener('mousemove',e=>{if(!drawStart)return;drawEnd=canvasCoord(c,e.clientX,e.clientY);redrawCanvas()});
 c.addEventListener('mouseup',()=>{if(!drawStart||!drawEnd)return;const sc=parseFloat(c.dataset.scale);
 const x=Math.round(Math.min(drawStart.x,drawEnd.x)/sc),y=Math.round(Math.min(drawStart.y,drawEnd.y)/sc),w=Math.round(Math.abs(drawEnd.x-drawStart.x)/sc),h=Math.round(Math.abs(drawEnd.y-drawStart.y)/sc);
-if(w>10&&h>10){selectedROI={x,y,w,h};document.getElementById('btn-save-profile').disabled=false;document.getElementById('btn-save-combo').disabled=false;document.getElementById('cal-roi-info').textContent=w+'x'+h+' at ('+x+','+y+')';document.getElementById('cal-roi-info').classList.remove('hidden')}else{selectedROI=null;document.getElementById('btn-save-profile').disabled=true;document.getElementById('btn-save-combo').disabled=true}drawStart=null});
-c.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];drawStart=canvasCoord(c,t.clientX,t.clientY);drawEnd=null;selectedROI=null},{passive:false});
-c.addEventListener('touchmove',e=>{e.preventDefault();if(!drawStart)return;const t=e.touches[0];drawEnd=canvasCoord(c,t.clientX,t.clientY);redrawCanvas()},{passive:false});
-c.addEventListener('touchend',()=>{if(drawStart&&drawEnd)c.dispatchEvent(new Event('mouseup'))})}
+if(w>10&&h>10){selectedROI={x,y,w,h};renderROIInfo()}else{selectedROI=null;document.getElementById('btn-save-profile').disabled=true;document.getElementById('btn-save-combo').disabled=true}drawStart=null;redrawCanvas()});
+c.addEventListener('touchstart',e=>{e.preventDefault();if(e.touches.length===2){pinchDistance=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);touchMode='pinch';return}const t=e.touches[0],p=canvasCoord(c,t.clientX,t.clientY),sc=parseFloat(c.dataset.scale);touchOrigin=p;if(selectedROI){const left=selectedROI.x*sc,top=selectedROI.y*sc,right=(selectedROI.x+selectedROI.w)*sc,bottom=(selectedROI.y+selectedROI.h)*sc,corners=[[left,top],[right,top],[right,bottom],[left,bottom]];const handle=corners.findIndex(([x,y])=>Math.hypot(p.x-x,p.y-y)<28);roiOrigin={...selectedROI};if(handle>=0){touchMode='resize-'+handle;return}if(p.x>=left&&p.x<=right&&p.y>=top&&p.y<=bottom){touchMode='move';return}}touchMode='draw';drawStart=p;drawEnd=null;selectedROI=null},{passive:false});
+c.addEventListener('touchmove',e=>{e.preventDefault();if(touchMode==='pinch'&&e.touches.length===2){const distance=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);canvasZoom=Math.max(1,Math.min(3,canvasZoom*(distance/pinchDistance)));pinchDistance=distance;c.style.width=(canvasZoom*100)+'%';return}if(!e.touches.length)return;const t=e.touches[0],p=canvasCoord(c,t.clientX,t.clientY),sc=parseFloat(c.dataset.scale);if(touchMode==='draw'){drawEnd=p}else if(touchMode==='move'&&roiOrigin){selectedROI={...roiOrigin,x:Math.max(0,Math.min(snapshotW-roiOrigin.w,Math.round(roiOrigin.x+(p.x-touchOrigin.x)/sc))),y:Math.max(0,Math.min(snapshotH-roiOrigin.h,Math.round(roiOrigin.y+(p.y-touchOrigin.y)/sc)))}}else if(touchMode&&touchMode.startsWith('resize-')&&roiOrigin){const i=Number(touchMode.slice(-1)),px=Math.max(0,Math.min(snapshotW,Math.round(p.x/sc))),py=Math.max(0,Math.min(snapshotH,Math.round(p.y/sc))),x2=roiOrigin.x+roiOrigin.w,y2=roiOrigin.y+roiOrigin.h;if(i===0)selectedROI={x:px,y:py,w:x2-px,h:y2-py};if(i===1)selectedROI={x:roiOrigin.x,y:py,w:px-roiOrigin.x,h:y2-py};if(i===2)selectedROI={x:roiOrigin.x,y:roiOrigin.y,w:px-roiOrigin.x,h:py-roiOrigin.y};if(i===3)selectedROI={x:px,y:roiOrigin.y,w:x2-px,h:py-roiOrigin.y};if(selectedROI.w<12||selectedROI.h<12)selectedROI={...roiOrigin}}redrawCanvas()},{passive:false});
+c.addEventListener('touchend',e=>{if(e.touches.length)return;if(touchMode==='draw'&&drawStart&&drawEnd)c.dispatchEvent(new Event('mouseup'));else if(selectedROI)renderROIInfo();touchMode=null;touchOrigin=null;roiOrigin=null;redrawCanvas()})}
+
+function renderROIInfo(){if(!selectedROI)return;document.getElementById('btn-save-profile').disabled=false;document.getElementById('btn-save-combo').disabled=false;const box=document.getElementById('cal-roi-info');box.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">ROI <label>X <input class="input-sm" id="roi-x" type="number" value="'+selectedROI.x+'"></label><label>Y <input class="input-sm" id="roi-y" type="number" value="'+selectedROI.y+'"></label><label>W <input class="input-sm" id="roi-w" type="number" value="'+selectedROI.w+'"></label><label>H <input class="input-sm" id="roi-h" type="number" value="'+selectedROI.h+'"></label><button class="btn-sm" onclick="applyNumericROI()">Update</button></div><div style="margin-top:5px">Drag inside to move · drag corner handles to resize · pinch to zoom.</div>';box.classList.remove('hidden')}
+function applyNumericROI(){const read=id=>Number(document.getElementById(id).value);const next={x:read('roi-x'),y:read('roi-y'),w:read('roi-w'),h:read('roi-h')};if(!Object.values(next).every(Number.isFinite)||next.w<12||next.h<12||next.x<0||next.y<0||next.x+next.w>snapshotW||next.y+next.h>snapshotH){showError('ROI must stay inside the frame and be at least 12×12.');return}selectedROI=next;renderROIInfo();redrawCanvas()}
 
 function redrawCanvas(){const c=document.getElementById('snapshot-canvas'),ctx=c.getContext('2d');if(!snapshotImg)return;
 ctx.drawImage(snapshotImg,0,0,c.width,c.height);
 if(drawStart&&drawEnd){ctx.strokeStyle='rgba(212,113,74,0.9)';ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.strokeRect(drawStart.x,drawStart.y,drawEnd.x-drawStart.x,drawEnd.y-drawStart.y);ctx.setLineDash([])}
-if(selectedROI){const sc=parseFloat(c.dataset.scale);ctx.strokeStyle='rgba(212,113,74,1)';ctx.lineWidth=2;ctx.strokeRect(selectedROI.x*sc,selectedROI.y*sc,selectedROI.w*sc,selectedROI.h*sc)}}
+if(selectedROI){const sc=parseFloat(c.dataset.scale),x=selectedROI.x*sc,y=selectedROI.y*sc,w=selectedROI.w*sc,h=selectedROI.h*sc;ctx.strokeStyle='rgba(212,113,74,1)';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);ctx.fillStyle='rgba(212,113,74,1)';for(const[p,q]of[[x,y],[x+w,y],[x+w,y+h],[x,y+h]])ctx.fillRect(p-6,q-6,12,12)}}
 
 function calDuration(){const v=parseInt(document.getElementById('cal-duration').value,10);return Number.isFinite(v)&&v>0?v:null}
 
@@ -929,12 +1349,148 @@ async function toggleMark(kind){try{const s=activeMark===kind?await api('POST','
 async function refreshMarkCounts(){try{renderMarkUI(await api('GET','/api/mark/status'))}catch(e){}}
 async function clearSamples(){try{await api('POST','/api/mark/clear');document.getElementById('suggest-results').classList.add('hidden');await refreshMarkCounts()}catch(e){showError(e.message)}}
 
+async function loadActivity(){try{const r=await api('GET','/api/activity?limit=100'),box=document.getElementById('activity-list');if(!r.activity.length){box.textContent='No activity yet.';return}box.innerHTML=r.activity.map(item=>{const confidence=item.evidence&&(item.evidence.fused_result?item.evidence.fused_result.confidence:item.evidence.confidence_template),reason=item.reason?' · '+esc(item.reason):'',score=Number.isFinite(Number(confidence))?' · confidence '+Number(confidence).toFixed(2):'',undone=item.undone?' · undone':'';return '<div class="activity-item"><div><strong>'+esc(item.kind.replace(/_/g,' '))+'</strong><div style="color:var(--text3);font-size:.75rem">'+reason+score+esc(undone)+'</div></div><time style="color:var(--text3);font-size:.75rem">'+new Date(item.timestamp*1000).toLocaleTimeString()+'</time></div>'}).join('')}catch(e){}}
+async function scanCaptureDevices(){try{const r=await api('GET','/api/devices/capture'),select=document.getElementById('capture-device-select');select.innerHTML='';for(const d of r.devices){const o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name;o.selected=d.id===r.selected||d.name===r.selected;select.appendChild(o)}if(!r.devices.length)select.innerHTML='<option>No capture devices found</option>'}catch(e){showError(e.message)}}
+async function saveSelectedCapture(){const select=document.getElementById('capture-device-select'),option=select.options[select.selectedIndex],id=select.value,name=option&&option.dataset.name;if(!id||id.startsWith('No '))return;try{await api('POST','/api/devices/capture/select',{id,name:name||option.textContent});showSuccess('Capture device saved; restart the engine to apply.')}catch(e){showError(e.message)}}
+async function scanAppleTVs(){try{const r=await api('GET','/api/devices/appletv'),select=document.getElementById('appletv-device-select');select.innerHTML='';for(const d of r.devices){const o=document.createElement('option');o.value=d.id;o.textContent=d.name+' · '+d.address;o.selected=d.id===r.selected;select.appendChild(o)}if(!r.devices.length)select.innerHTML='<option>No Apple TVs found</option>'}catch(e){showError(e.message)}}
+async function beginAppleTVPair(){const identifier=document.getElementById('appletv-device-select').value;if(!identifier){showError('Scan and select an Apple TV first.');return}try{pendingAppleTVPair=await api('POST','/api/devices/appletv/pair/start',{identifier,protocol:'Companion'});document.getElementById('appletv-pair-help').textContent=pendingAppleTVPair.device_provides_pin?'Enter the PIN shown on the Apple TV.':'Enter '+pendingAppleTVPair.pin_code+' on the Apple TV, then finish.';document.getElementById('appletv-pair-modal').classList.remove('hidden')}catch(e){showError(e.message)}}
+function closeAppleTVPair(){document.getElementById('appletv-pair-modal').classList.add('hidden');pendingAppleTVPair=null}
+async function finishAppleTVPair(){if(!pendingAppleTVPair)return;const value=document.getElementById('appletv-pin').value.trim();try{await api('POST','/api/devices/appletv/pair/finish',{token:pendingAppleTVPair.token,pin:value?Number(value):null});closeAppleTVPair();showSuccess('Apple TV paired.')}catch(e){showError(e.message)}}
+
+async function loadDiagnostics(){try{const n=await api('GET','/api/network/info'),box=document.getElementById('network-details');box.innerHTML='<div><strong>Local:</strong> http://127.0.0.1:'+n.port+'/</div><div><strong>LAN:</strong> '+esc(n.url)+'</div><div><strong>Binding:</strong> '+esc(n.bind_host)+(n.lan_enabled?' · trusted-device pairing required':' · localhost only (safe default)')+'</div>'+(!n.lan_enabled?'<code style="display:block;white-space:normal;margin-top:10px;color:var(--text3)">'+esc(n.enable_hint)+'</code>':'');document.getElementById('network-qr').style.display=n.lan_enabled?'block':'none'}catch(e){}}
+async function loadTrustedDevices(){try{const r=await api('GET','/api/auth/devices'),box=document.getElementById('trusted-devices');if(!r.devices.length){box.textContent='No paired devices.';return}box.innerHTML=r.devices.map(d=>'<div class="activity-item"><div><strong>'+esc(d.device_name)+'</strong><div style="color:var(--text3);font-size:.72rem">Last seen '+new Date(d.last_seen*1000).toLocaleString()+(d.active?'':' · revoked/expired')+'</div></div>'+(d.active?'<button class="btn-sm" onclick="revokeDevice(\''+encodeURIComponent(d.id)+'\')">Revoke</button>':'')+'</div>').join('')}catch(e){}}
+async function revokeDevice(id){try{await api('DELETE','/api/auth/devices/'+id);await loadTrustedDevices();showSuccess('Device revoked.')}catch(e){showError(e.message)}}
+
+function wizardSelectedProfile(){return localStorage.getItem('selectedProfile')||''}
+function syncWizardProfile(channel){localStorage.setItem('selectedProfile',channel);for(const id of ['channel-select','basic-profile-select']){const select=document.getElementById(id);if(select)select.value=channel}}
+
+async function initializeWizardDetection(){
+  const select=document.getElementById('wizard-mode'),status=document.getElementById('wizard-mode-status');
+  if(!select||!status)return;
+  try{
+    const settings=settingsSnapshot||await api('GET','/api/settings');
+    select.value=settings.DETECTION_MODE||'legacy';
+    status.textContent='Current mode: '+select.options[select.selectedIndex].textContent+'.';
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not load detection settings: '+e.message}
+}
+
+async function saveWizardDetectionMode(){
+  const select=document.getElementById('wizard-mode'),status=document.getElementById('wizard-mode-status');
+  if(!select||!status)return false;
+  select.disabled=true;status.className='wizard-check-status checking';status.textContent='Saving detection mode...';
+  try{
+    await api('POST','/api/settings',{DETECTION_MODE:select.value});
+    if(settingsSnapshot)settingsSnapshot.DETECTION_MODE=select.value;
+    for(const id of ['detection-mode','basic-detection-mode']){const target=document.getElementById(id);if(target)target.value=select.value}
+    status.className='wizard-check-status success';status.textContent=select.options[select.selectedIndex].textContent+' mode saved.';
+    return true;
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not save detection mode: '+e.message;return false}
+  finally{select.disabled=false}
+}
+
+async function loadWizardProfiles(preferred){
+  const select=document.getElementById('wizard-profile-select'),status=document.getElementById('wizard-calibration-status');
+  if(!select||!status)return;
+  select.disabled=true;
+  try{
+    const result=await api('GET','/api/profiles'),selected=preferred||wizardSelectedProfile();
+    select.innerHTML='<option value="">Choose a saved profile...</option>';
+    for(const profile of result.profiles){const option=document.createElement('option');option.value=profile;option.textContent=profile.toUpperCase();option.selected=profile===selected;select.appendChild(option)}
+    select.disabled=false;
+    if(select.value)await selectWizardProfile();
+    else if(!result.profiles.length){status.className='wizard-check-status checking';status.textContent='No profiles yet. Create one below while normal programming and its channel logo are visible.'}
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not load profiles: '+e.message}
+}
+
+async function selectWizardProfile(){
+  const select=document.getElementById('wizard-profile-select'),status=document.getElementById('wizard-calibration-status');
+  if(!select||!status)return false;
+  if(!select.value){status.className='wizard-check-status error';status.textContent='Choose or create a channel profile before continuing.';return false}
+  try{
+    const profile=await api('GET','/api/profile/'+encodeURIComponent(select.value));
+    syncWizardProfile(select.value);
+    status.className='wizard-check-status success';status.textContent='Using '+select.value.toUpperCase()+' · '+(profile.mode||'logo')+' profile'+(profile.corner?' · '+String(profile.corner).replace('_',' '):'')+'.';
+    return true;
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not use that profile: '+e.message;return false}
+}
+
+async function runWizardCalibration(){
+  const input=document.getElementById('wizard-calibration-channel'),button=document.getElementById('wizard-calibrate-start'),status=document.getElementById('wizard-calibration-status');
+  if(!input||!button||!status)return;
+  const channel=input.value.trim().toLowerCase();
+  if(!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(channel)){status.className='wizard-check-status error';status.textContent='Enter a short channel name using letters, numbers, dashes, or underscores.';input.focus();return}
+  const seconds=(settingsSnapshot&&settingsSnapshot.CALIBRATION_DURATION)||60;
+  input.disabled=true;button.disabled=true;button.textContent='Calibrating...';status.className='wizard-check-status checking';status.textContent='Sampling '+channel.toUpperCase()+' for about '+seconds+' seconds. Keep normal programming with the channel logo visible.';
+  try{
+    const result=await api('POST','/api/calibrate',{channel});
+    input.value='';await loadProfiles();await loadWizardProfiles(result.channel);
+    status.className='wizard-check-status success';status.textContent=result.channel.toUpperCase()+' profile created and selected.';
+  }catch(e){status.className='wizard-check-status error';status.textContent='Calibration failed: '+e.message}
+  finally{input.disabled=false;button.disabled=false;button.textContent='Create profile'}
+}
+
+function initializeWizardShadow(){
+  const profile=wizardSelectedProfile(),mode=(settingsSnapshot&&settingsSnapshot.DETECTION_MODE)||'legacy',summary=document.getElementById('wizard-shadow-summary'),button=document.getElementById('wizard-shadow-start'),status=document.getElementById('wizard-shadow-status');
+  if(!summary||!button||!status)return;
+  summary.textContent=profile?'Profile: '+profile.toUpperCase()+' · Mode: '+mode:'No channel profile selected.';
+  button.disabled=!profile;
+  if(!profile){status.className='wizard-check-status error';status.textContent='Go back to Calibration and choose or create a profile first.'}
+}
+
+async function startWizardShadow(){
+  const profile=wizardSelectedProfile(),button=document.getElementById('wizard-shadow-start'),status=document.getElementById('wizard-shadow-status'),mode=(settingsSnapshot&&settingsSnapshot.DETECTION_MODE)||'legacy';
+  if(!profile||!button||!status)return;
+  button.disabled=true;button.textContent='Starting...';status.className='wizard-check-status checking';status.textContent='Starting detection without TV control...';
+  try{
+    const current=await api('GET','/api/status');
+    if(['running','disabled'].includes(current.engine_state))await api('POST','/api/stop');
+    await api('POST','/api/start',{channel:profile,shadow:true,detection_mode:mode});
+    localStorage.setItem('startShadow','true');status.className='wizard-check-status success';status.textContent='Shadow mode is running with '+profile.toUpperCase()+'. No mute or skip commands will be sent.';button.textContent='Restart shadow trial';
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not start shadow mode: '+e.message;button.textContent='Start shadow trial'}
+  finally{button.disabled=false}
+}
+
+function initializeWizardFinish(){
+  const profile=wizardSelectedProfile(),mode=(settingsSnapshot&&settingsSnapshot.DETECTION_MODE)||'legacy',summary=document.getElementById('wizard-finish-summary'),status=document.getElementById('wizard-finish-status');
+  if(summary)summary.textContent=profile?'Profile: '+profile.toUpperCase()+' · Mode: '+mode:'No profile selected.';
+  if(status&&!profile){status.className='wizard-check-status error';status.textContent='Go back and select a profile before finishing.'}
+}
+
+async function finishWizardSetup(){
+  const profile=wizardSelectedProfile(),mode=(settingsSnapshot&&settingsSnapshot.DETECTION_MODE)||'legacy',auto=document.getElementById('wizard-auto-mute'),status=document.getElementById('wizard-finish-status'),next=document.getElementById('wizard-next');
+  if(!profile||!status||!next){if(status){status.className='wizard-check-status error';status.textContent='Select a channel profile before finishing.'}return false}
+  next.disabled=true;next.textContent='Activating...';status.className='wizard-check-status checking';status.textContent='Saving settings and switching from shadow mode to normal control...';
+  try{
+    await api('POST','/api/settings',{DETECTION_MODE:mode,AUTOMATIC_MUTING_ENABLED:!auto||auto.checked});
+    const current=await api('GET','/api/status');
+    if(['running','disabled'].includes(current.engine_state)&&current.shadow_mode)await api('POST','/api/stop');
+    if(!['running','disabled'].includes(current.engine_state)||current.shadow_mode)await api('POST','/api/start',{channel:profile,shadow:false,detection_mode:mode});
+    localStorage.setItem('startShadow','false');
+    await api('POST','/api/setup',{complete:true,step:6});
+    document.getElementById('setup-wizard').classList.add('hidden');showSuccess('Setup complete. Normal control is active with '+profile.toUpperCase()+'.');return true;
+  }catch(e){status.className='wizard-check-status error';status.textContent='Could not activate normal control: '+e.message;return false}
+  finally{next.disabled=false;next.textContent='Finish'}
+}
+
+const WIZARD_STEPS=[
+  ['Capture card','Connect the HDMI capture card, choose it below, then verify that The Clicker can read a frame.','<label class="wizard-device-picker">Video input<select id="wizard-capture-select" disabled><option value="">Scanning...</option></select></label><div class="btn-group"><button onclick="scanWizardCaptureDevices()">Refresh devices</button><button class="btn-accent" id="wizard-capture-check" onclick="checkWizardCapture()" disabled>Use and check</button></div><div id="wizard-capture-status" class="wizard-check-status" role="status" aria-live="polite"></div>'],
+  ['Apple TV','Choose the Apple TV used for playback controls, then pair Authentication and AirPlay.','<label class="wizard-device-picker">Apple TV<select id="wizard-appletv-select" onchange="resetWizardAppleTVPairing()" disabled><option value="">Scanning...</option></select></label><button id="wizard-appletv-refresh" onclick="scanWizardAppleTVs()">Refresh Apple TVs</button><div id="wizard-appletv-scan-status" class="wizard-check-status" role="status" aria-live="polite"></div><div class="wizard-pair-grid"><div class="wizard-pair-card"><strong>Authentication &amp; remote control</strong><p>Required for playback status, mute, and skip commands.</p><button id="wizard-auth-start" onclick="beginWizardAppleTVPair(\'Companion\')" disabled>Start authentication</button><div id="wizard-auth-controls" class="wizard-pair-controls hidden"><input class="input" id="wizard-auth-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" placeholder="Authentication code" onkeydown="if(event.key===\'Enter\')finishWizardAppleTVPair(\'Companion\')"><button class="btn-accent" id="wizard-auth-finish" onclick="finishWizardAppleTVPair(\'Companion\')">Submit code</button></div><div id="wizard-auth-status" class="wizard-pair-status" role="status" aria-live="polite">Not paired yet.</div></div><div class="wizard-pair-card"><strong>AirPlay</strong><p>Pairs the AirPlay service credentials used by the Apple TV connection.</p><button id="wizard-airplay-start" onclick="beginWizardAppleTVPair(\'AirPlay\')" disabled>Start AirPlay pairing</button><div id="wizard-airplay-controls" class="wizard-pair-controls hidden"><input class="input" id="wizard-airplay-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" placeholder="AirPlay code" onkeydown="if(event.key===\'Enter\')finishWizardAppleTVPair(\'AirPlay\')"><button class="btn-accent" id="wizard-airplay-finish" onclick="finishWizardAppleTVPair(\'AirPlay\')">Submit code</button></div><div id="wizard-airplay-status" class="wizard-pair-status" role="status" aria-live="polite">Not paired yet.</div></div></div>'],
+  ['Detection mode','Legacy is proven and simple. Hybrid combines video with optional audio, fingerprints, and ML.','<div class="wizard-form-grid"><label>Detection mode<select id="wizard-mode" onchange="saveWizardDetectionMode()"><option value="legacy">Legacy</option><option value="hybrid">Hybrid</option></select></label></div><div id="wizard-mode-status" class="wizard-check-status" role="status" aria-live="polite"></div>'],
+  ['Calibration','Choose an existing channel profile or create one while normal programming and its logo are visible.','<div class="wizard-form-grid"><label>Saved profile<select id="wizard-profile-select" onchange="selectWizardProfile()" disabled><option value="">Loading profiles...</option></select></label><button onclick="loadWizardProfiles()">Refresh profiles</button><div class="wizard-summary">Or create a profile automatically. Calibration samples the four screen corners and finds the persistent channel logo.</div><label>Channel name<input class="input" id="wizard-calibration-channel" maxlength="40" placeholder="e.g. espn"></label><button class="btn-accent" id="wizard-calibrate-start" onclick="runWizardCalibration()">Create profile</button></div><div id="wizard-calibration-status" class="wizard-check-status" role="status" aria-live="polite"></div>'],
+  ['Shadow trial','Run detection without controlling the TV while you validate the selected profile.','<div id="wizard-shadow-summary" class="wizard-summary"></div><button class="btn-accent" id="wizard-shadow-start" style="margin-top:10px" onclick="startWizardShadow()">Start shadow trial</button><div id="wizard-shadow-status" class="wizard-check-status" role="status" aria-live="polite"></div>'],
+  ['Enable control','Finish setup by leaving shadow mode and starting normal Apple TV control.','<div id="wizard-finish-summary" class="wizard-summary"></div><label class="setting-row"><span>Automatic muting</span><input id="wizard-auto-mute" type="checkbox" checked></label><div id="wizard-finish-status" class="wizard-check-status" role="status" aria-live="polite"></div>']
+];
+function renderWizard(){const step=WIZARD_STEPS[wizardStep],progress=document.getElementById('wizard-progress');progress.innerHTML=WIZARD_STEPS.map((_,i)=>'<span class="'+(i<=wizardStep?'done':'')+'"></span>').join('');document.getElementById('wizard-title').textContent=step[0];document.getElementById('wizard-content').innerHTML='<p>'+step[1]+'</p>'+step[2];document.getElementById('wizard-back').disabled=wizardStep===0;document.getElementById('wizard-next').textContent=wizardStep===WIZARD_STEPS.length-1?'Finish':'Next';if(wizardStep===0)setTimeout(scanWizardCaptureDevices,0);if(wizardStep===1)setTimeout(scanWizardAppleTVs,0);if(wizardStep===2)setTimeout(initializeWizardDetection,0);if(wizardStep===3)setTimeout(loadWizardProfiles,0);if(wizardStep===4)setTimeout(initializeWizardShadow,0);if(wizardStep===5)setTimeout(initializeWizardFinish,0)}
+async function wizardMove(direction){try{if(direction>0&&wizardStep===2&&!(await saveWizardDetectionMode()))return;if(direction>0&&wizardStep===3&&!wizardSelectedProfile()){const status=document.getElementById('wizard-calibration-status');if(status){status.className='wizard-check-status error';status.textContent='Choose or create a channel profile before continuing.'}return}if(direction>0&&wizardStep===WIZARD_STEPS.length-1){await finishWizardSetup();return}wizardStep=Math.max(0,Math.min(WIZARD_STEPS.length-1,wizardStep+direction));await api('POST','/api/setup',{complete:false,step:wizardStep});renderWizard()}catch(e){showError('Wizard step failed: '+e.message)}}
+async function maybeShowWizard(){try{const state=await api('GET','/api/setup');if(!state.complete){wizardStep=Math.min(Number(state.step)||0,WIZARD_STEPS.length-1);renderWizard();document.getElementById('setup-wizard').classList.remove('hidden')}}catch(e){}}
+
 // Tab navigation (active tab persists in localStorage)
-function showTab(name){for(const t of['watch','tune','setup']){document.getElementById('tab-'+t).style.display=t===name?'':'none';document.getElementById('tab-btn-'+t).classList.toggle('active',t===name)}
+function showTab(name){for(const t of['watch','activity','setup','tune','diagnostics']){document.getElementById('tab-'+t).style.display=t===name?'':'none';document.getElementById('tab-btn-'+t).classList.toggle('active',t===name);const bottom=document.getElementById('bottom-btn-'+t);if(bottom)bottom.classList.toggle('active',t===name)}
   localStorage.setItem('activeTab',name);
+  if(name==='activity')loadActivity();if(name==='diagnostics'){loadDiagnostics();loadTrustedDevices()}
   // A chart sized while its tab was hidden measures 0 wide; resize on reveal.
   if(name==='watch'||name==='tune')setTimeout(()=>{for(const ch of timelineCharts)ch.resize()},0)}
-function initTabs(){const t=localStorage.getItem('activeTab');showTab(['watch','tune','setup'].includes(t)?t:'watch')}
+function initTabs(){const t=localStorage.getItem('activeTab');showTab(['watch','activity','setup','tune','diagnostics'].includes(t)?t:'watch')}
 function fmt(v){return(v===undefined||v===null)?'-':Number(v).toFixed(2)}
 function renderSignalRow(name,signal,matchKey,recoveryKey,debounceKey,recoveryDebounceKey){if(!signal||!signal.available)return '<div style="opacity:0.5;font-size:0.78rem;margin-bottom:8px"><strong>'+name+'</strong>: not enough signal in samples</div>';
   const c=signal.content,x=signal.commercial,warn=signal.overlap?'<span style="color:var(--accent);font-size:0.72rem"> (distributions overlap, try more samples)</span>':'';
@@ -958,10 +1514,13 @@ async function suggestThresholds(){try{const r=await api('GET','/api/suggest-thr
   const box=document.getElementById('suggest-results');box.innerHTML=html;box.classList.remove('hidden')}catch(e){showError(e.message)}}
 async function applySignal(matchKey,matchVal,recoveryKey,recoveryVal,debounceKey,debounceVal,recoveryDebounceKey,recoveryDebounceVal){try{const body={};body[matchKey]=matchVal;body[recoveryKey]=recoveryVal;body[debounceKey]=debounceVal;body[recoveryDebounceKey]=recoveryDebounceVal;await api('POST','/api/settings',body);showSuccess('Applied: '+matchKey.split('_')[0].toLowerCase()+' match='+matchVal+' · recovery='+recoveryVal+' · debounce='+debounceVal+' · rec.debounce='+recoveryDebounceVal);await loadSettings()}catch(e){showError(e.message)}}
 
-(async function(){
-  initChart();initCanvas();initTabs();await loadProfiles();await loadSettings();
-  pollStatus();setInterval(pollStatus,POLL_MS);setInterval(updateChart,2000);setInterval(refreshLivePalette,3000);setInterval(refreshMarkCounts,1000);refreshMarkCounts();
-})();
+async function refreshFingerprints(){try{const r=await api('GET','/api/fingerprints');const box=document.getElementById('fingerprint-list');box.innerHTML=r.advertisements.length?r.advertisements.map(a=>{const id=encodeURIComponent(String(a.id)).replace(/'/g,'%27');return '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>'+esc(a.name)+' · '+Number(a.duration).toFixed(1)+'s</span><button style="padding:2px 7px" onclick="deleteFingerprint(decodeURIComponent(\''+id+'\'))">Delete</button></div>'}).join(''):'No trusted advertisements enrolled.'}catch(e){}}
+async function enrollFingerprint(){const name=document.getElementById('fingerprint-name').value.trim(),seconds=parseFloat(document.getElementById('fingerprint-seconds').value)||10;if(!name){showError('Enter a confirmed ad name.');return}try{const r=await api('POST','/api/fingerprints/enroll',{name,seconds,metadata:{source:'dashboard_manual_confirmation'}});showSuccess(r.created?'Fingerprint enrolled.':'Duplicate fingerprint already exists.');await refreshFingerprints()}catch(e){showError(e.message)}}
+async function deleteFingerprint(id){if(!confirm('Delete this trusted fingerprint?'))return;try{await api('DELETE','/api/fingerprints/'+encodeURIComponent(id));await refreshFingerprints()}catch(e){showError(e.message)}}
+
+let dashboardInitialized=false;
+async function initializeDashboard(){if(dashboardInitialized)return;dashboardInitialized=true;initChart();initCanvas();initTabs();setSettingsLevel(localStorage.getItem('settingsLevel')==='advanced'?'advanced':'basic');await loadProfiles();await loadSettings();await refreshFingerprints();await loadActivity();pollStatus();setInterval(pollStatus,POLL_MS);setInterval(updateChart,2000);setInterval(refreshLivePalette,3000);setInterval(refreshMarkCounts,1000);refreshMarkCounts();await maybeShowWizard()}
+(async function(){if(await initializeAuth())await initializeDashboard()})();
 </script>
 </body>
 </html>

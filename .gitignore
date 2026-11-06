@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 venv/
+.venv/
 coddle/
 
 # Credentials (machine-specific, contains pairing keys)
@@ -8,6 +9,7 @@ credentials.json
 
 # Persisted last-running session (machine-specific runtime state)
 .last_session.json
+.muted_by_clicker.json
 
 # Profiles are machine-specific calibrations and contain captured network logo
 # imagery, keep them local, not in the repo. The dir itself is kept via .gitkeep.
@@ -21,6 +23,9 @@ docs/
 # Ship only the README, keep design notes / other markdown local
 *.md
 !README.md
+!docs/
+!docs/hybrid-detection.md
 
 # Debug / test artifacts (frames, ROIs, calibration snapshots) go here
 scratch/
+data/

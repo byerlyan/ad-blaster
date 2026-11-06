@@ -57,6 +57,8 @@ Any generic "USB 3.0 HDMI capture card" works. They're typically UVC devices Lin
 
 ## 3. Install
 
+### Debian / Raspberry Pi / Proxmox
+
 Works on any Debian family system with systemd. A **Raspberry Pi** (Raspberry Pi OS), a Debian/Ubuntu machine, or a Proxmox LXC container should work fine.
 
 1. **Plug the capture card** into a USB 3.0 port and confirm the OS sees it:
@@ -70,9 +72,47 @@ Works on any Debian family system with systemd. A **Raspberry Pi** (Raspberry Pi
    cd /opt/the-clicker
    sudo bash deploy/setup.sh
    ```
-   It installs dependencies into a venv, installs a `the-clicker` systemd service (starts on boot), and sanity checks the capture device. The dashboard comes up on port **8080**.
+   It installs dependencies into a venv, installs a `the-clicker` systemd service (starts on boot), and sanity checks the capture device. The installer asks whether to expose the dashboard to trusted devices on your home LAN. The safe default is local-only on `127.0.0.1:8080`.
 
 > Prefer to skip systemd and run it by hand? `pip install -r requirements.txt` then `python3 server.py`. Pairing, calibration, and the dashboard are identical.
+
+### macOS
+
+The macOS installer uses Homebrew Python and FFmpeg, installs the application
+under `~/Library/Application Support/The Clicker`, and creates a per-user
+LaunchAgent. Do not run it with `sudo`; Camera and Local Network permissions
+must belong to the logged-in user.
+
+```bash
+git clone https://github.com/michigandrew/the-clicker.git
+cd the-clicker
+bash deploy/setup-macos.sh
+```
+
+The safe default listens only on `127.0.0.1:8080`. For paired phone/tablet
+access on your home network, either answer yes at the prompt or use:
+
+```bash
+bash deploy/setup-macos.sh --lan
+```
+
+Useful noninteractive options are `--local-only`, `--lan`, and `--no-start`.
+Rerun the installer after pulling updates; it preserves `credentials.json`,
+profiles, settings, fingerprints, corrections, and other runtime data. On the
+first capture or Apple TV scan, macOS may request Camera and Local Network
+access for Homebrew Python. Allow both in **System Settings → Privacy &
+Security**.
+
+```bash
+# Inspect, restart, or stop the LaunchAgent
+launchctl print gui/$(id -u)/com.theclicker.app
+launchctl kickstart -k gui/$(id -u)/com.theclicker.app
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.theclicker.app.plist"
+
+# Follow logs (the LAN pairing code is written here)
+tail -f "$HOME/Library/Logs/The Clicker/clicker.log" \
+  "$HOME/Library/Logs/The Clicker/clicker-error.log"
+```
 
 ### Updating later
 
@@ -99,7 +139,7 @@ The software controls the Apple TV with [pyatv](https://pyatv.dev/) over the net
    ```
    Copy the `Identifier` for your Apple TV.
 2. **Set it.** Either edit `APPLE_TV_ID` in [`config.py`](config.py), or set the `APPLE_TV_ID` environment variable.
-3. **Pair** (one time. A PIN appears on the TV):
+3. **Pair** (one time. A PIN appears on the TV). You can use **Settings → Basic → Devices** in the dashboard, or the CLI:
    ```bash
    cd /opt/the-clicker && source venv/bin/activate && python3 pair.py
    ```
@@ -122,8 +162,8 @@ Notes: `get_playback_status` is what decides live vs delayed. If your device can
 
 The software needs to learn where each channel's logo sits, and build a color profile for the content you're watching. Do this from the dashboard:
 
-1. Start the service and open the dashboard: `http://<box-ip>:8080`
-2. Go to the **Setup** tab → **Check Capture Card** (confirm you see a live frame).
+1. Start the service and open the dashboard locally, or use the paired LAN URL described below.
+2. Go to **Calibration** → **Check Capture Card** (confirm you see a live frame).
 3. Tune to the channel during the **game** (not a commercial).
 4. **Grab Snapshot**, then **draw a box** around the network logo in the corner.
 5. Name it and **Save**. Three profile types:
@@ -137,14 +177,17 @@ Theoretically you should only need to do this once per channel, but I've gotten 
 
 ## 6. Daily use
 
-- **Dashboard** (`http://<box-ip>:8080`) has three tabs:
-  - **Watch**: Start / Stop, live timeline of detection confidence, and the current captured frame.
-  - **Tune**: sensitivity **Presets**, threshold tuning, and all settings.
-  - **Setup**: profiles, hardware check, create/recalibrate profiles.
+- The mobile-first dashboard has five destinations:
+  - **Home**: status, Start / Pause / Stop, manual mute/unmute, and one-tap Program/Commercial corrections with undo.
+  - **Activity**: detector decisions, actions, reasons, and saved corrections.
+  - **Calibration**: profile diagnostics, capture check, touch ROI selection, resize handles, pinch zoom, and numeric coordinates.
+  - **Settings**: Basic by default (mode, sensitivity, automatic muting, shadow preference, profile/devices); Advanced exposes detector, subsystem, fusion, intervention, and safety controls.
+  - **Diagnostics**: detector health, LAN address/QR, and revocable trusted-device sessions.
 - **Start** picks up the selected channel's profile and begins. **Shadow** mode detects without touching the TV (great for testing).
 - Live vs delayed is detected automatically: **live → mute**, **delayed → skip forward**.
+- On the first visit, a six-step wizard walks through capture, Apple TV pairing, detection mode, calibration, shadow validation, and enabling automatic control.
 
-### Presets (Tune tab)
+### Sensitivity presets (Settings)
 One click picks how eager the system is to call something a commercial:
 
 - **Conservative**: never mutes the game; you'll hear a few seconds of ad bleed at break edges. Best when you'd rather not miss a single play.
@@ -152,7 +195,19 @@ One click picks how eager the system is to call something a commercial:
 - **Aggressive**: near zero ad audio; may clip a few seconds of game at break edges.
 
 ### Dialing it in
-If detection is shaky on a channel, use **Tune → Mark Content / Mark Commercial**: press start/stop through a stretch of show and of ads, then hit **Suggest** to get data driven threshold values. This is the fastest way to make a flaky channel reliable.
+If detection is shaky on a channel, switch Settings to **Advanced**, then use **Mark Content / Mark Commercial**: press start/stop through a stretch of show and of ads, then hit **Suggest** to get data driven threshold values. This is the fastest way to make a flaky channel reliable.
+
+### LAN and phone access
+
+The server binds to localhost by default. To opt into home-LAN access, set `CLICKER_HOST=0.0.0.0` (the installer can do this for its systemd service):
+
+```bash
+CLICKER_HOST=0.0.0.0 python3 server.py
+```
+
+LAN mode automatically enables authentication. Open the LAN URL shown under **Diagnostics**, enter the rotating one-time code printed in the host log, and name the device. The session is stored in an HttpOnly, SameSite cookie; state-changing requests also require a per-session CSRF token. Sessions have server-enforced idle and absolute expiration and can be revoked individually. Pairing attempts are rate limited. Do not forward port 8080 to the public internet; this is designed for a trusted home network.
+
+The Diagnostics QR opens the local URL. After pairing, use Safari or Chrome's **Add to Home Screen** command for a standalone PWA-style launcher. Offline control is intentionally not cached because stale device commands are unsafe.
 
 ---
 
@@ -183,15 +238,61 @@ journalctl -u the-clicker -f      # live logs. STATE CHANGE lines show detection
 |---|---|
 | `server.py` | FastAPI web server: dashboard, API, presets, calibration endpoints |
 | `dashboard.html` | The single page dashboard UI |
+| `help.html` | In-app Legacy, model-training, trusted-ad, and evaluation guide |
+| `dashboard_auth.py` | Pairing codes, hashed server-side sessions, expiry, CSRF, and revocation |
+| `corrections.py` | Durable one-tap labels with evidence, deduplication, undo, and relabeling |
+| `device_setup.py` | Capture enumeration and dashboard Apple TV discovery/pairing |
 | `engine.py` | The control loop: capture → detect → mute/skip; session state and tuning |
 | `detector.py` | Logo/color/combo detection, debounce + hysteresis, break length decay |
+| `detection_pipeline.py` | Common detector results, legacy adapter, and hybrid fusion |
+| `audio.py` | Optional FFmpeg capture and lightweight audio features |
+| `ad_overlay.py` | Safe OCR flagging for explicit ad labels and countdowns |
+| `fingerprint.py` | Persistent trusted-ad fingerprints and matching |
+| `ml.py` | Grouped feature collection and optional ML inference |
+| `evaluation.py` | Legacy/hybrid time-weighted evaluation metrics |
 | `calibrate.py` | Builds channel profiles from captured frames |
 | `capture.py` | Reads frames from the capture card |
 | `intervention.py` | `PlaybackController` interface + the Apple TV (pyatv) backend (mute / unmute / skip) |
 | `config.py` | All tunable settings |
 | `pair.py` | One time Apple TV pairing |
 | `deploy/setup.sh` | Installer + systemd service (Pi / Debian / LXC) |
+| `deploy/setup-macos.sh` | Homebrew installer + per-user LaunchAgent (macOS) |
 | `tests/` | `pytest` suite (`python3 -m pytest tests/`) |
+
+### Detection modes
+
+The default `legacy` mode preserves the existing logo/color/combo behavior.
+The opt-in `hybrid` pipeline combines the existing visual profile with optional
+audio transitions, trusted local fingerprints, explicit on-screen ad-label OCR,
+and a lightweight trained model.
+Start hybrid mode in shadow mode while evaluating it:
+
+```bash
+DETECTION_MODE=hybrid python3 server.py
+```
+
+See [Hybrid detection architecture](docs/hybrid-detection.md) for its safety
+semantics, configuration, API diagnostics, extension points, and current
+limitations.
+
+For a development/test environment, install `requirements-dev.txt`, which
+includes the runtime dependencies plus pytest and the FastAPI test client:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest -q
+```
+
+Optional repeatable responsive-browser QA uses installed Chrome plus Playwright WebKit:
+
+```bash
+python3 -m pip install -r requirements-browser.txt
+playwright install webkit
+python3 server.py                    # terminal 1
+python3 scripts/browser_smoke.py     # terminal 2
+```
+
+The browser smoke test covers 320, 390, 431, 768, and 1024 px layouts, touch navigation, minimum target sizes, settings cancellation, connection loss/recovery, manifest delivery, and the LAN QR endpoint.
 
 ---
 
