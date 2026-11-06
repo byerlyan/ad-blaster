@@ -78,10 +78,14 @@ Works on any Debian family system with systemd. A **Raspberry Pi** (Raspberry Pi
 
 ### macOS
 
-The macOS installer uses Homebrew Python and FFmpeg, installs the application
-under `~/Library/Application Support/The Clicker`, and creates a per-user
-LaunchAgent. Do not run it with `sudo`; Camera and Local Network permissions
+Both macOS installers put the application under
+`~/Library/Application Support/The Clicker` and create a per-user LaunchAgent.
+Do not run either installer with `sudo`; Camera and Local Network permissions
 must belong to the logged-in user.
+
+#### Apple silicon / Homebrew
+
+The standard installer uses Homebrew Python, FFmpeg, and Tesseract:
 
 ```bash
 git clone https://github.com/michigandrew/the-clicker.git
@@ -102,6 +106,24 @@ profiles, settings, fingerprints, corrections, and other runtime data. On the
 first capture or Apple TV scan, macOS may request Camera and Local Network
 access for Homebrew Python. Allow both in **System Settings → Privacy &
 Security**.
+
+#### Intel Mac / MacPorts
+
+The Homebrew-free Intel installer uses native MacPorts packages for Python
+3.12, OpenCV, PyObjC, FFmpeg, and Tesseract. Install the package matching your
+macOS release from the [official MacPorts installer](https://www.macports.org/install.php),
+then run:
+
+```bash
+git clone https://github.com/michigandrew/the-clicker.git
+cd the-clicker
+bash deploy/setup-macos-intel.sh
+```
+
+Use `--lan`, `--local-only`, or `--no-start` in the same way as the standard
+installer. The Intel path uses a separate `venv-macports` environment, so it
+does not overwrite an existing Homebrew environment. The script itself runs as
+your user and requests `sudo` only when MacPorts installs or updates packages.
 
 ```bash
 # Inspect, restart, or stop the LaunchAgent
@@ -257,6 +279,7 @@ journalctl -u the-clicker -f      # live logs. STATE CHANGE lines show detection
 | `pair.py` | One time Apple TV pairing |
 | `deploy/setup.sh` | Installer + systemd service (Pi / Debian / LXC) |
 | `deploy/setup-macos.sh` | Homebrew installer + per-user LaunchAgent (macOS) |
+| `deploy/setup-macos-intel.sh` | MacPorts installer + per-user LaunchAgent (Intel macOS) |
 | `tests/` | `pytest` suite (`python3 -m pytest tests/`) |
 
 ### Detection modes

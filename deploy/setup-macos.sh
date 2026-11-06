@@ -59,6 +59,7 @@ AGENT_LABEL="com.theclicker.app"
 PYTHON_FORMULA="${CLICKER_PYTHON_FORMULA:-python@3.12}"
 CLICKER_PORT_VALUE="${CLICKER_PORT:-8080}"
 USER_ID="$(id -u)"
+PACKAGE_MANAGER="${CLICKER_PACKAGE_MANAGER:-homebrew}"
 
 case "$CLICKER_PORT_VALUE" in
     ''|*[!0-9]*) echo "CLICKER_PORT must be a number." >&2; exit 2 ;;
@@ -68,54 +69,96 @@ if [ "$CLICKER_PORT_VALUE" -lt 1 ] || [ "$CLICKER_PORT_VALUE" -gt 65535 ]; then
     exit 2
 fi
 
-BREW_BIN="$(command -v brew 2>/dev/null || true)"
-if [ -z "$BREW_BIN" ]; then
-    for brew_candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
-        if [ -x "$brew_candidate" ]; then
-            BREW_BIN="$brew_candidate"
-            break
-        fi
-    done
-fi
-if [ -z "$BREW_BIN" ]; then
-    echo "Homebrew is required. Install it from https://brew.sh, then rerun this script." >&2
-    exit 1
-fi
-BREW_PREFIX="$("$BREW_BIN" --prefix)"
+RUNTIME_NAME=""
+RUNTIME_PREFIX=""
+REQUIREMENTS_NAME="requirements.txt"
+VENV_NAME="venv"
+VENV_SYSTEM_SITE="false"
 
-echo "[1/6] Installing Homebrew runtime packages..."
-for formula in "$PYTHON_FORMULA" ffmpeg tesseract; do
-    if ! "$BREW_BIN" list --versions "$formula" >/dev/null 2>&1; then
-        "$BREW_BIN" install "$formula"
-    else
-        echo "  $formula is already installed."
+if [ "$PACKAGE_MANAGER" = "macports" ]; then
+    if [ "$(uname -m)" != "x86_64" ]; then
+        echo "The MacPorts installer is intended for Intel Macs (x86_64)." >&2
+        exit 1
     fi
-done
+    RUNTIME_NAME="MacPorts"
+    RUNTIME_PREFIX="${CLICKER_MACPORTS_PREFIX:-/opt/local}"
+    PORT_BIN="$(command -v port 2>/dev/null || true)"
+    if [ -z "$PORT_BIN" ] && [ -x "$RUNTIME_PREFIX/bin/port" ]; then
+        PORT_BIN="$RUNTIME_PREFIX/bin/port"
+    fi
+    if [ -z "$PORT_BIN" ]; then
+        echo "MacPorts is required for the Intel installer." >&2
+        echo "Install the matching macOS package from https://www.macports.org/install.php and rerun." >&2
+        exit 1
+    fi
+    echo "[1/6] Installing MacPorts Intel runtime packages..."
+    /usr/bin/sudo "$PORT_BIN" install \
+        python312 py312-pip py312-virtualenv py312-opencv4 py312-pyobjc \
+        ffmpeg tesseract
+    PYTHON_BIN="$RUNTIME_PREFIX/bin/python3.12"
+    REQUIREMENTS_NAME="requirements-intel-macos.txt"
+    VENV_NAME="venv-macports"
+    VENV_SYSTEM_SITE="true"
+elif [ "$PACKAGE_MANAGER" = "homebrew" ]; then
+    RUNTIME_NAME="Homebrew"
+    BREW_BIN="$(command -v brew 2>/dev/null || true)"
+    if [ -z "$BREW_BIN" ]; then
+        for brew_candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+            if [ -x "$brew_candidate" ]; then
+                BREW_BIN="$brew_candidate"
+                break
+            fi
+        done
+    fi
+    if [ -z "$BREW_BIN" ]; then
+        echo "Homebrew is required. Install it from https://brew.sh, then rerun this script." >&2
+        exit 1
+    fi
+    RUNTIME_PREFIX="$("$BREW_BIN" --prefix)"
 
-PYTHON_PREFIX="$("$BREW_BIN" --prefix "$PYTHON_FORMULA")"
-PYTHON_BIN="$PYTHON_PREFIX/bin/python3.12"
-if [ ! -x "$PYTHON_BIN" ]; then
-    PYTHON_BIN="$PYTHON_PREFIX/bin/python3"
-fi
-if [ ! -x "$PYTHON_BIN" ]; then
-    PYTHON_BIN=""
-    for python_candidate in "$PYTHON_PREFIX"/bin/python3.*; do
-        case "$python_candidate" in
-            *-config) continue ;;
-        esac
-        if [ -x "$python_candidate" ]; then
-            PYTHON_BIN="$python_candidate"
-            break
+    echo "[1/6] Installing Homebrew runtime packages..."
+    for formula in "$PYTHON_FORMULA" ffmpeg tesseract; do
+        if ! "$BREW_BIN" list --versions "$formula" >/dev/null 2>&1; then
+            "$BREW_BIN" install "$formula"
+        else
+            echo "  $formula is already installed."
         fi
     done
+
+    PYTHON_PREFIX="$("$BREW_BIN" --prefix "$PYTHON_FORMULA")"
+    PYTHON_BIN="$PYTHON_PREFIX/bin/python3.12"
+    if [ ! -x "$PYTHON_BIN" ]; then
+        PYTHON_BIN="$PYTHON_PREFIX/bin/python3"
+    fi
+    if [ ! -x "$PYTHON_BIN" ]; then
+        PYTHON_BIN=""
+        for python_candidate in "$PYTHON_PREFIX"/bin/python3.*; do
+            case "$python_candidate" in
+                *-config) continue ;;
+            esac
+            if [ -x "$python_candidate" ]; then
+                PYTHON_BIN="$python_candidate"
+                break
+            fi
+        done
+    fi
+else
+    echo "Unsupported package manager: $PACKAGE_MANAGER" >&2
+    exit 2
 fi
+
 if [ ! -x "$PYTHON_BIN" ]; then
-    echo "Could not find Homebrew Python under $PYTHON_PREFIX." >&2
+    echo "Could not find $RUNTIME_NAME Python at $PYTHON_BIN." >&2
     exit 1
 fi
-FFMPEG_BIN="$BREW_PREFIX/bin/ffmpeg"
+FFMPEG_BIN="$RUNTIME_PREFIX/bin/ffmpeg"
+TESSERACT_BIN="$RUNTIME_PREFIX/bin/tesseract"
 if [ ! -x "$FFMPEG_BIN" ]; then
-    echo "Could not find Homebrew FFmpeg at $FFMPEG_BIN." >&2
+    echo "Could not find $RUNTIME_NAME FFmpeg at $FFMPEG_BIN." >&2
+    exit 1
+fi
+if [ ! -x "$TESSERACT_BIN" ]; then
+    echo "Could not find $RUNTIME_NAME Tesseract at $TESSERACT_BIN." >&2
     exit 1
 fi
 
@@ -129,7 +172,8 @@ APP_FILES=(
     fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py
     pair.py corrections.py dashboard_auth.py device_setup.py dashboard.html help.html
     manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png
-    requirements.txt requirements-dev.txt requirements-ml.txt requirements-browser.txt
+    requirements.txt requirements-intel-macos.txt requirements-dev.txt
+    requirements-ml.txt requirements-browser.txt
 )
 if [ "$SOURCE_DIR" != "$INSTALL_DIR" ]; then
     for file_name in "${APP_FILES[@]}"; do
@@ -164,12 +208,23 @@ if [ "$SOURCE_DIR" != "$INSTALL_DIR" ]; then
 fi
 
 echo "[4/6] Creating the Python environment..."
-VENV_DIR="$INSTALL_DIR/venv"
+VENV_DIR="$INSTALL_DIR/$VENV_NAME"
 if [ ! -x "$VENV_DIR/bin/python3" ]; then
-    "$PYTHON_BIN" -m venv "$VENV_DIR"
+    if [ "$VENV_SYSTEM_SITE" = "true" ]; then
+        "$PYTHON_BIN" -m venv --system-site-packages "$VENV_DIR"
+    else
+        "$PYTHON_BIN" -m venv "$VENV_DIR"
+    fi
 fi
 "$VENV_DIR/bin/python3" -m pip install --quiet --upgrade pip
-"$VENV_DIR/bin/python3" -m pip install --quiet -r "$INSTALL_DIR/requirements.txt"
+"$VENV_DIR/bin/python3" -m pip install --quiet -r "$INSTALL_DIR/$REQUIREMENTS_NAME"
+if [ "$PACKAGE_MANAGER" = "macports" ]; then
+    if ! "$VENV_DIR/bin/python3" -c 'import AVFoundation, cv2, numpy' >/dev/null 2>&1; then
+        echo "MacPorts Python cannot import AVFoundation, OpenCV, and NumPy." >&2
+        echo "Verify that py312-pyobjc and py312-opencv4 are active, then rerun." >&2
+        exit 1
+    fi
+fi
 
 if [ "$BIND_MODE" = "ask" ]; then
     BIND_MODE="local"
@@ -189,7 +244,7 @@ fi
 echo "[5/6] Writing the LaunchAgent..."
 "$VENV_DIR/bin/python3" - "$PLIST_PATH" "$AGENT_LABEL" "$INSTALL_DIR" \
     "$VENV_DIR/bin/python3" "$LOG_DIR" "$BIND_HOST" "$CLICKER_PORT_VALUE" \
-    "$FFMPEG_BIN" "$BREW_PREFIX" <<'PY'
+    "$FFMPEG_BIN" "$TESSERACT_BIN" "$RUNTIME_PREFIX" <<'PY'
 import plistlib
 import sys
 
@@ -202,7 +257,8 @@ import sys
     bind_host,
     port,
     ffmpeg_bin,
-    brew_prefix,
+    tesseract_bin,
+    runtime_prefix,
 ) = sys.argv[1:]
 
 payload = {
@@ -218,7 +274,8 @@ payload = {
         "CLICKER_HOST": bind_host,
         "CLICKER_PORT": port,
         "FFMPEG_BINARY": ffmpeg_bin,
-        "PATH": f"{brew_prefix}/bin:{brew_prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "TESSERACT_BINARY": tesseract_bin,
+        "PATH": f"{runtime_prefix}/bin:{runtime_prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
     },
     "StandardOutPath": f"{log_dir}/clicker.log",
     "StandardErrorPath": f"{log_dir}/clicker-error.log",
@@ -274,7 +331,7 @@ elif [ "$BIND_MODE" = "lan" ]; then
 fi
 echo ""
 echo "macOS may ask for Camera and Local Network access on first use. Allow the"
-echo "Homebrew Python process, then use Calibration → Check Capture Card."
+echo "$RUNTIME_NAME Python process, then use Calibration → Check Capture Card."
 echo ""
 if [ ! -f "$INSTALL_DIR/credentials.json" ]; then
     echo "Pair the Apple TV in Settings → Devices, or run:"

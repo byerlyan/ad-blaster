@@ -3,11 +3,14 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).parents[1] / "deploy" / "setup-macos.sh"
+INTEL_SCRIPT = Path(__file__).parents[1] / "deploy" / "setup-macos-intel.sh"
 REQUIREMENTS = Path(__file__).parents[1] / "requirements.txt"
+INTEL_REQUIREMENTS = Path(__file__).parents[1] / "requirements-intel-macos.txt"
 
 
 def test_macos_installer_has_valid_bash_syntax():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+    subprocess.run(["bash", "-n", str(INTEL_SCRIPT)], check=True)
 
 
 def test_macos_installer_help_is_safe_and_documents_network_modes():
@@ -34,6 +37,38 @@ def test_macos_installer_uses_user_launch_agent_and_preserves_runtime_state():
     assert "dashboard.html help.html" in script
     assert 'ffmpeg tesseract' in script
     assert "audio.py ad_overlay.py" in script
+    assert '"TESSERACT_BINARY": tesseract_bin' in script
+
+
+def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
+    result = subprocess.run(
+        ["bash", str(INTEL_SCRIPT), "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    wrapper = INTEL_SCRIPT.read_text()
+    common = SCRIPT.read_text()
+    requirements = INTEL_REQUIREMENTS.read_text()
+    assert "Intel-only, Homebrew-free installer" in result.stdout
+    assert "CLICKER_MACPORTS_PREFIX" in result.stdout
+    assert '"$(uname -m)" != "x86_64"' in wrapper
+    assert 'CLICKER_PACKAGE_MANAGER="macports"' in wrapper
+    for package in (
+        "python312",
+        "py312-pip",
+        "py312-virtualenv",
+        "py312-opencv4",
+        "py312-pyobjc",
+        "ffmpeg",
+        "tesseract",
+    ):
+        assert package in common
+    assert "--system-site-packages" in common
+    assert 'VENV_NAME="venv-macports"' in common
+    assert "opencv-python" not in requirements
+    assert "pyobjc-framework" not in requirements.lower()
+    assert "fastapi>=0.110" in requirements
 
 
 def test_appletv_srp_dependency_is_pinned_below_breaking_release():

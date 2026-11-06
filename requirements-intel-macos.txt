@@ -1,0 +1,9 @@
+# Intel macOS runtime packages installed into the MacPorts-backed venv.
+# NumPy, OpenCV, and PyObjC come from native MacPorts packages so this install
+# does not depend on PyPI wheels that may target newer Intel macOS releases.
+
+pyatv>=0.16,<0.19
+srptools>=1.0.1,<2
+fastapi>=0.110
+uvicorn>=0.27
+qrcode[pil]>=7.4
