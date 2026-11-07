@@ -325,8 +325,37 @@ class AdOverlayDetector:
             )
 
         self._last_scan_at = sample.timestamp
-        ocr_input = _stack_regions(_normalized_regions(sample.frame, self._regions))
-        observations = [self._coerce_observation(self._ocr(ocr_input))]
+        try:
+            ocr_input = _stack_regions(_normalized_regions(sample.frame, self._regions))
+            observations = [self._coerce_observation(self._ocr(ocr_input))]
+        except subprocess.TimeoutExpired as exc:
+            self._consecutive_matches = 0
+            return DetectorResult.unavailable(
+                self.name,
+                sample.timestamp,
+                "ocr_timeout",
+                error=f"Tesseract exceeded its {float(exc.timeout):g}s timeout",
+                retryable=True,
+            )
+        except FileNotFoundError as exc:
+            self._available = False
+            self._consecutive_matches = 0
+            return DetectorResult.unavailable(
+                self.name,
+                sample.timestamp,
+                "tesseract_unavailable",
+                error=f"{type(exc).__name__}: {exc}"[:240],
+                retryable=False,
+            )
+        except Exception as exc:
+            self._consecutive_matches = 0
+            return DetectorResult.unavailable(
+                self.name,
+                sample.timestamp,
+                "ocr_error",
+                error=f"{type(exc).__name__}: {exc}"[:240],
+                retryable=True,
+            )
         text = " | ".join(item.text for item in observations if item.text).strip()
         ocr_confidence = max((item.confidence for item in observations), default=0.0)
         countdown = _countdown_seconds(text)

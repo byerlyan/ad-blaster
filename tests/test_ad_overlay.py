@@ -1,3 +1,5 @@
+import subprocess
+
 import numpy as np
 
 from ad_overlay import AdOverlayDetector, OCRObservation
@@ -47,6 +49,30 @@ def test_missing_tesseract_is_unavailable_not_commercial():
     assert not actual.available
     assert actual.classification == Classification.UNKNOWN
     assert actual.diagnostics["reason"] == "tesseract_unavailable"
+
+
+def test_tesseract_timeout_is_reported_without_crashing_pipeline():
+    def timed_out(_image):
+        raise subprocess.TimeoutExpired(["tesseract"], 2.0)
+
+    actual = detector(timed_out).evaluate(sample(1.0))
+
+    assert not actual.available
+    assert actual.classification == Classification.UNKNOWN
+    assert actual.diagnostics["reason"] == "ocr_timeout"
+    assert actual.diagnostics["error"] == "Tesseract exceeded its 2s timeout"
+    assert actual.diagnostics["retryable"] is True
+
+
+def test_ocr_failure_exposes_a_bounded_diagnostic():
+    def failed(_image):
+        raise RuntimeError("language data could not be loaded")
+
+    actual = detector(failed).evaluate(sample(1.0))
+
+    assert not actual.available
+    assert actual.diagnostics["reason"] == "ocr_error"
+    assert actual.diagnostics["error"] == "RuntimeError: language data could not be loaded"
 
 
 def test_countdown_without_ad_label_is_only_a_diagnostic_flag():

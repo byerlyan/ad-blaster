@@ -437,7 +437,7 @@ class DetectionPipeline:
                         detector.name,
                         sample.timestamp,
                         "detector_error",
-                        error=f"{type(exc).__name__}: {exc}",
+                        error=f"{type(exc).__name__}: {exc}"[:240],
                     )
                 )
         fused = self._fusion.fuse(results, timestamp=sample.timestamp)

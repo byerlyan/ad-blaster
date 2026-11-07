@@ -1164,7 +1164,12 @@ async function deleteProfile(){
 function confColor(v,t){return v>=t?'var(--green)':'var(--red)'}
 function esc(v){return String(v===undefined||v===null?'--':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function renderDetectorDiagnostics(s){
-  const rows=(s.detector_results||[]).map(r=>{const d=r.diagnostics||{},overlay=r.detector_name==='ad_overlay'?(d.explicit_ad_label?' · flag: '+esc(d.ocr_text)+(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · '+esc(d.countdown_seconds)+'s left':''):(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · timer ignored without ad label':' · '+esc(d.reason||''))):'';return '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text2)">'+esc(r.detector_name)+'</strong> · '+esc(r.classification)+' · '+Number(r.confidence||0).toFixed(3)+' <span style="opacity:.7">('+esc(r.confidence_kind)+')</span>'+(r.available?'':' · unavailable: '+esc(d.reason))+overlay+'</div>'}).join('');
+  const rows=(s.detector_results||[]).map(r=>{
+    const d=r.diagnostics||{};
+    const unavailable=!r.available?' · unavailable: '+esc(d.reason||'unknown')+(d.error?' · '+esc(d.error):''):'';
+    const overlay=r.detector_name==='ad_overlay'&&r.available?(d.explicit_ad_label?' · flag: '+esc(d.ocr_text)+(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · '+esc(d.countdown_seconds)+'s left':''):(d.countdown_seconds!==null&&d.countdown_seconds!==undefined?' · timer ignored without ad label':' · '+esc(d.reason||''))):'';
+    return '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><strong style="color:var(--text2)">'+esc(r.detector_name)+'</strong> · '+esc(r.classification)+' · '+Number(r.confidence||0).toFixed(3)+' <span style="opacity:.7">('+esc(r.confidence_kind)+')</span>'+unavailable+overlay+'</div>';
+  }).join('');
   const fused=s.fused_result?'<div style="padding:7px 0;color:var(--green)"><strong>Fused</strong> · '+esc(s.fused_result.classification)+' · '+Number(s.fused_result.confidence||0).toFixed(3)+'</div>':'<div style="padding:7px 0">Fused: legacy mode</div>';
   const legacy=(s.detector_results||[]).find(r=>r.detector_name==='legacy_visual');
   const compare=s.shadow_mode&&legacy?'<div style="padding:5px 0"><strong>Shadow comparison</strong> · legacy '+esc(legacy.classification)+' / hybrid '+esc(s.fused_result?s.fused_result.classification:'not active')+'</div>':'';
