@@ -94,6 +94,28 @@ def test_dashboard_uses_direct_private_lan_access_without_pairing(restore_settin
     assert not server._is_local_network_client("8.8.8.8")
 
 
+def test_audio_device_api_returns_dropdown_choices(monkeypatch, restore_settings):
+    monkeypatch.setattr(config, "AUDIO_DEVICE_NAME", "USB Digital Audio")
+    monkeypatch.setattr(
+        server,
+        "audio_device_diagnostics",
+        lambda _binary: {
+            "devices": [
+                {"id": "0", "name": "MacBook Pro Microphone"},
+                {"id": "1", "name": "USB Digital Audio"},
+            ],
+            "supported": True,
+            "error": None,
+        },
+    )
+
+    response = TestClient(server.app).get("/api/devices/audio")
+
+    assert response.status_code == 200
+    assert response.json()["selected"] == "USB Digital Audio"
+    assert response.json()["devices"][1]["name"] == "USB Digital Audio"
+
+
 def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     root = Path(__file__).parents[1]
     html = (root / "dashboard.html").read_text()
@@ -114,6 +136,9 @@ def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     assert 'id="basic-auto-muting"' in html
     assert 'id="basic-auto-skipping"' in html
     assert "Leave skipping off for mute-only operation" in html
+    assert '<select class="input" id="set-audio-device"' in html
+    assert 'input class="input" id="set-audio-device"' not in html
+    assert "/api/devices/audio" in html
 
 
 def test_help_page_documents_legacy_training_and_safety_workflows():

@@ -111,6 +111,37 @@ def assert_wizard_capture_feedback(page) -> None:
     page.unroute("**/api/capture-check")
 
 
+def assert_audio_device_dropdown(page) -> None:
+    response = {
+        "devices": [
+            {"id": "0", "name": "MacBook Pro Microphone"},
+            {"id": "1", "name": "USB Digital Audio"},
+        ],
+        "selected": "USB Digital Audio",
+        "supported": True,
+        "error": None,
+    }
+    page.route(
+        "**/api/devices/audio",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(response)
+        ),
+    )
+    page.evaluate(
+        "() => { audioDevicesLoaded=false; settingsSnapshot.AUDIO_DEVICE_NAME=''; document.querySelector('#set-audio-device').value=''; setSettingsLevel('advanced'); }"
+    )
+    page.wait_for_function(
+        "() => document.querySelector('#set-audio-device').options.length === 3"
+    )
+    select = page.locator("#set-audio-device")
+    assert select.input_value() == "USB Digital Audio"
+    select.select_option(label="MacBook Pro Microphone")
+    assert select.input_value() == "MacBook Pro Microphone"
+    assert page.locator("input#set-audio-device").count() == 0
+    page.evaluate("() => setSettingsLevel('basic')")
+    page.unroute("**/api/devices/audio")
+
+
 def assert_wizard_appletv_pairing(page) -> None:
     started = []
     finished = []
@@ -360,6 +391,7 @@ def run_engine(playwright, name: str):
                 assert page.locator("#basic-auto-skipping").is_checked() == original_skip
 
             if width == 390:
+                assert_audio_device_dropdown(page)
                 assert_wizard_capture_feedback(page)
                 assert_wizard_appletv_pairing(page)
                 assert_wizard_detection_calibration_and_activation(page)

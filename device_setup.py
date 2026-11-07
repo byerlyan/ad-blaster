@@ -8,6 +8,7 @@ import logging
 import os
 import platform
 import secrets
+import shutil
 import time
 from pathlib import Path
 
@@ -63,6 +64,46 @@ def capture_device_diagnostics() -> dict:
             "devices": [],
             "permission": "unknown",
             "backend_available": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def audio_device_diagnostics(ffmpeg_binary: str = "ffmpeg") -> dict:
+    """Return the audio inputs exposed to the runtime's FFmpeg.
+
+    AudioAnalyzer currently uses AVFoundation, so probing through FFmpeg keeps
+    dashboard names identical to the names accepted when the engine starts.
+    """
+    if platform.system() != "Darwin":
+        return {
+            "devices": [],
+            "supported": False,
+            "error": "Audio capture currently supports macOS AVFoundation only",
+        }
+    try:
+        from audio import probe_avfoundation_audio_devices
+
+        binary = shutil.which(ffmpeg_binary)
+        if binary is None:
+            return {
+                "devices": [],
+                "supported": True,
+                "error": f"FFmpeg executable not found: {ffmpeg_binary}",
+            }
+        devices = probe_avfoundation_audio_devices(binary)
+        return {
+            "devices": [
+                {"id": str(device.index), "name": device.name}
+                for device in devices
+            ],
+            "supported": True,
+            "error": None if devices else "No AVFoundation audio inputs were found",
+        }
+    except Exception as exc:
+        logger.exception("Could not enumerate macOS audio devices")
+        return {
+            "devices": [],
+            "supported": True,
             "error": f"{type(exc).__name__}: {exc}",
         }
 

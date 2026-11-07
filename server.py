@@ -31,6 +31,7 @@ from corrections import CorrectionStore
 from device_setup import (
     AppleTVPairingError,
     AppleTVSetup,
+    audio_device_diagnostics,
     capture_device_diagnostics,
 )
 from engine import Engine
@@ -410,6 +411,15 @@ async def select_capture_device(req: CaptureDeviceSelectRequest):
         snapshot = _apply_settings({"CAPTURE_DEVICE": req.id})
         selected = req.id
     return {"ok": True, "selected": selected, **snapshot}
+
+
+@app.get("/api/devices/audio")
+async def audio_devices():
+    diagnostics = await asyncio.to_thread(
+        audio_device_diagnostics,
+        config.FFMPEG_BINARY,
+    )
+    return {**diagnostics, "selected": config.AUDIO_DEVICE_NAME}
 
 
 @app.get("/api/devices/appletv")

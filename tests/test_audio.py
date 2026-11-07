@@ -3,11 +3,14 @@ import math
 import numpy as np
 
 from audio import (
+    AudioDevice,
     AudioFeatureExtractor,
     AudioFeatures,
     AudioTransitionDetector,
     parse_avfoundation_audio_devices,
 )
+import audio
+import device_setup
 from detection_pipeline import (
     Classification,
     DetectionInput,
@@ -32,6 +35,30 @@ def test_parse_avfoundation_audio_devices_uses_audio_section_only():
         (0, "MacBook Pro Microphone"),
         (1, "USB Digital Audio"),
     ]
+
+
+def test_audio_device_diagnostics_returns_ffmpeg_names(monkeypatch):
+    monkeypatch.setattr(device_setup.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(device_setup.shutil, "which", lambda binary: binary)
+    monkeypatch.setattr(
+        audio,
+        "probe_avfoundation_audio_devices",
+        lambda _binary: [
+            AudioDevice(0, "MacBook Pro Microphone"),
+            AudioDevice(2, "USB Digital Audio"),
+        ],
+    )
+
+    result = device_setup.audio_device_diagnostics("/opt/local/bin/ffmpeg")
+
+    assert result == {
+        "devices": [
+            {"id": "0", "name": "MacBook Pro Microphone"},
+            {"id": "2", "name": "USB Digital Audio"},
+        ],
+        "supported": True,
+        "error": None,
+    }
 
 
 def test_audio_features_detect_silence_without_nan():
