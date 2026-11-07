@@ -83,6 +83,10 @@ def test_dashboard_uses_direct_private_lan_access_without_pairing(restore_settin
     assert client.post(
         "/api/settings", json={"AUTOMATIC_MUTING_ENABLED": False}
     ).status_code == 200
+    assert client.post(
+        "/api/settings",
+        json={"AUTOMATIC_MUTING_ENABLED": True, "AUTOMATIC_SKIPPING_ENABLED": False},
+    ).json()["AUTOMATIC_SKIPPING_ENABLED"] is False
     assert client.get("/api/auth/status").status_code == 404
     assert server._is_local_network_client("127.0.0.1")
     assert server._is_local_network_client("192.168.1.25")
@@ -107,6 +111,9 @@ def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     assert 'id="pair-modal"' not in html
     assert "csrfToken" not in html
     assert "no Clicker pairing code or dashboard login" in html
+    assert 'id="basic-auto-muting"' in html
+    assert 'id="basic-auto-skipping"' in html
+    assert "Leave skipping off for mute-only operation" in html
 
 
 def test_help_page_documents_legacy_training_and_safety_workflows():

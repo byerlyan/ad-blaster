@@ -298,6 +298,7 @@ def assert_wizard_detection_calibration_and_activation(page) -> None:
     assert settings_updates[-1] == {
         "DETECTION_MODE": "hybrid",
         "AUTOMATIC_MUTING_ENABLED": True,
+        "AUTOMATIC_SKIPPING_ENABLED": False,
     }
     assert setup_updates[-1] == {"complete": True, "step": 6}
 
@@ -347,13 +348,16 @@ def run_engine(playwright, name: str):
                 assert page.locator("#settings-basic").is_visible()
                 page.wait_for_function("() => settingsSnapshot !== null")
                 original = page.locator("#basic-auto-muting").is_checked()
+                original_skip = page.locator("#basic-auto-skipping").is_checked()
                 page.locator("#basic-auto-muting").set_checked(not original)
+                page.locator("#basic-auto-skipping").set_checked(not original_skip)
                 page.locator("#settings-basic .settings-actions button").first.click()
                 page.wait_for_function(
-                    "expected => document.querySelector('#basic-auto-muting').checked === expected",
-                    arg=original,
+                    "expected => document.querySelector('#basic-auto-muting').checked === expected.mute && document.querySelector('#basic-auto-skipping').checked === expected.skip",
+                    arg={"mute": original, "skip": original_skip},
                 )
                 assert page.locator("#basic-auto-muting").is_checked() == original
+                assert page.locator("#basic-auto-skipping").is_checked() == original_skip
 
             if width == 390:
                 assert_wizard_capture_feedback(page)

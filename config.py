@@ -45,6 +45,9 @@ AUTOMATIC_MUTING_ENABLED = True
 # ---------------------------------------------------------------------------
 # Skip control
 # ---------------------------------------------------------------------------
+# Skipping is independent from muting and deliberately opt in. When enabled it
+# is attempted only for delayed/DVR playback; live commercials can still mute.
+AUTOMATIC_SKIPPING_ENABLED = False
 FIRST_SKIP_COUNT = 8           # skip_forward presses on first jump (120s)
 SUBSEQUENT_SKIP_COUNT = 1      # skip_forward presses after first (15s)
 SKIP_SETTLE_TIME = 0.33        # seconds to wait after skip for frame to settle

@@ -28,12 +28,79 @@ class FakeController:
         self.unmute_calls += 1
 
 
+class FakeAudio:
+    def __init__(self, volume=42.0):
+        self.volume = volume
+        self.levels = []
+
+    async def set_volume(self, level):
+        self.levels.append(level)
+        self.volume = level
+
+
+class FakeRemote:
+    def __init__(self):
+        self.volume_down_calls = 0
+        self.volume_up_calls = 0
+
+    async def volume_down(self):
+        self.volume_down_calls += 1
+
+    async def volume_up(self):
+        self.volume_up_calls += 1
+
+
+class UnsupportedAudio:
+    @property
+    def volume(self):
+        raise NotImplementedError("absolute volume unavailable")
+
+    async def set_volume(self, level):
+        raise NotImplementedError("absolute volume unavailable")
+
+
 def test_appletv_controller_uses_runtime_selected_device(monkeypatch):
     monkeypatch.setattr(config, "APPLE_TV_ID", "selected-at-runtime")
 
     controller = AppleTVController()
 
     assert controller._device_id == "selected-at-runtime"
+
+
+def test_appletv_restores_exact_absolute_volume():
+    controller = AppleTVController("test-device")
+    controller._atv = object()
+    controller._remote = FakeRemote()
+    controller._audio = FakeAudio(37.0)
+
+    async def exercise():
+        await controller.mute()
+        await controller.unmute()
+
+    asyncio.run(exercise())
+
+    assert controller._audio.levels == [0.0, 37.0]
+    assert controller._remote.volume_down_calls == 0
+    assert controller._remote.volume_up_calls == 0
+
+
+def test_appletv_falls_back_to_remote_volume_buttons(monkeypatch):
+    monkeypatch.setattr(config, "MUTE_STEPS", 2)
+    monkeypatch.setattr(config, "UNMUTE_STEPS", 3)
+    monkeypatch.setattr(config, "VOLUME_COMMAND_DELAY", 0)
+    controller = AppleTVController("test-device")
+    controller._atv = object()
+    controller._remote = FakeRemote()
+    controller._audio = UnsupportedAudio()
+
+    async def exercise():
+        await controller.mute()
+        await controller.unmute()
+
+    asyncio.run(exercise())
+
+    assert controller._remote.volume_down_calls == 2
+    assert controller._remote.volume_up_calls == 3
 
 
 def test_mute_and_unmute_are_idempotent_and_persist_recovery_marker(tmp_path, monkeypatch):

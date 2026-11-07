@@ -13,6 +13,7 @@ The included backend is `AppleTVController` (pyatv).
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 from abc import ABC, abstractmethod
@@ -81,10 +82,10 @@ class PlaybackController(ABC):
     All methods are async. Notes for non Apple TV backends:
     - `get_playback_status` powers the live vs delayed decision via the
       returned `PlaybackStatus.mode`. If your device can't report playback
-      position, return zeros and set `PLAYBACK_MODE_OVERRIDE="live"` so the
-      engine only ever mutes (never tries to skip).
+      position, leave automatic skipping disabled; muting does not depend on
+      playback position.
     - If your device can't skip, implement `skip_forward`/`seek_forward` as
-      no ops and run in live (mute only) mode as above.
+      no ops and leave automatic skipping disabled.
     """
 
     @abstractmethod
@@ -127,44 +128,72 @@ class AppleTVController(PlaybackController):
         self._atv = None
         self._remote = None
         self._audio = None
+        self._volume_before_mute: float | None = None
+        # pyatv is asynchronous, but its command interfaces are not intended
+        # to have multi-step remote sequences interleaved.  Dashboard actions
+        # and the detection loop can arrive concurrently, so serialize them.
+        self._connection_lock = asyncio.Lock()
+        self._command_lock = asyncio.Lock()
 
     async def connect(self):
         """Scan for and connect to the Apple TV."""
-        logger.info("Scanning for Apple TV (id=%s)...", self._device_id)
-        loop = asyncio.get_event_loop()
-        atvs = await pyatv.scan(loop, identifier=self._device_id, timeout=5)
-        if not atvs:
-            raise ConnectionError(
-                f"Apple TV with id {self._device_id} not found on network"
-            )
+        async with self._connection_lock:
+            if self._atv is not None:
+                return
+            if not self._device_id or self._device_id == "YOUR_APPLE_TV_ID":
+                raise ConnectionError(
+                    "No Apple TV is selected. Choose one in Settings or the setup wizard."
+                )
 
-        conf = atvs[0]
+            logger.info("Scanning for Apple TV (id=%s)...", self._device_id)
+            loop = asyncio.get_running_loop()
+            atvs = await pyatv.scan(loop, identifier=self._device_id, timeout=5)
+            if not atvs:
+                raise ConnectionError(
+                    f"Apple TV with id {self._device_id} not found on network"
+                )
 
-        # Load saved credentials
-        creds_file = os.path.join(os.path.dirname(__file__), "credentials.json")
-        if os.path.exists(creds_file):
-            with open(creds_file) as f:
-                creds = json.load(f)
-            for service in conf.services:
-                key = str(service.protocol)
-                if key in creds:
-                    service.credentials = creds[key]
-                    logger.info("Loaded credentials for %s", key)
+            conf = atvs[0]
 
-        logger.info("Connecting to %s (%s)...", conf.name, conf.address)
-        self._atv = await pyatv.connect(conf, loop)
-        self._remote = self._atv.remote_control
-        self._audio = self._atv.audio
-        logger.info("Connected to Apple TV.")
+            # Load saved credentials for each advertised service. Pairing can
+            # produce only Companion credentials, only AirPlay credentials, or
+            # both depending on the tvOS version.
+            creds_file = os.path.join(os.path.dirname(__file__), "credentials.json")
+            if os.path.exists(creds_file):
+                try:
+                    with open(creds_file) as f:
+                        creds = json.load(f)
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ConnectionError(
+                        f"Could not read Apple TV credentials: {exc}"
+                    ) from exc
+                for service in conf.services:
+                    key = str(service.protocol)
+                    if key in creds:
+                        service.credentials = creds[key]
+                        logger.info("Loaded credentials for %s", key)
+
+            logger.info("Connecting to %s (%s)...", conf.name, conf.address)
+            self._atv = await pyatv.connect(conf, loop)
+            self._remote = self._atv.remote_control
+            self._audio = self._atv.audio
+            logger.info("Connected to Apple TV.")
 
     async def disconnect(self):
         """Close the connection."""
-        if self._atv:
-            self._atv.close()
-            self._atv = None
-            self._remote = None
-            self._audio = None
-            logger.info("Disconnected from Apple TV.")
+        async with self._connection_lock:
+            if self._atv:
+                pending = self._atv.close()
+                self._atv = None
+                self._remote = None
+                self._audio = None
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                logger.info("Disconnected from Apple TV.")
+
+    def _require_connection(self):
+        if self._atv is None or self._remote is None:
+            raise ConnectionError("Apple TV is not connected")
 
     # ------------------------------------------------------------------
     # Playback status
@@ -172,8 +201,9 @@ class AppleTVController(PlaybackController):
 
     async def get_playback_status(self) -> PlaybackStatus:
         """Query current playback info."""
-        playing = self._atv.metadata
-        status = await playing.playing()
+        async with self._command_lock:
+            self._require_connection()
+            status = await self._atv.metadata.playing()
         result = PlaybackStatus(
             title=status.title or "",
             position=status.position or 0,
@@ -204,16 +234,48 @@ class AppleTVController(PlaybackController):
                 await asyncio.sleep(config.VOLUME_COMMAND_DELAY)
 
     async def mute(self):
-        """Mute by spamming volume_down."""
-        logger.info("Muting: %d x volume_down", config.MUTE_STEPS)
-        await self._volume_press("volume_down", config.MUTE_STEPS)
-        logger.info("Muted.")
+        """Mute and remember the exact volume when pyatv exposes it.
+
+        Some Apple TV/audio-output combinations support absolute volume while
+        others only expose remote button presses. Prefer the exact operation
+        and retain the established button fallback for broad compatibility.
+        """
+        async with self._command_lock:
+            self._require_connection()
+            try:
+                current = float(self._audio.volume)
+                if not math.isfinite(current):
+                    raise ValueError("Apple TV returned a non-finite volume")
+                await self._audio.set_volume(0.0)
+                self._volume_before_mute = current
+                logger.info("Muted with absolute volume (previous %.1f).", current)
+                return
+            except Exception as exc:
+                logger.info("Absolute volume unavailable; using remote buttons: %s", exc)
+
+            logger.info("Muting: %d x volume_down", config.MUTE_STEPS)
+            await self._volume_press("volume_down", config.MUTE_STEPS)
+            self._volume_before_mute = None
+            logger.info("Muted.")
 
     async def unmute(self):
-        """Restore volume by spamming volume_up."""
-        logger.info("Unmuting: %d x volume_up", config.UNMUTE_STEPS)
-        await self._volume_press("volume_up", config.UNMUTE_STEPS)
-        logger.info("Unmuted.")
+        """Restore the exact pre-mute volume, with button fallback."""
+        async with self._command_lock:
+            self._require_connection()
+            if self._volume_before_mute is not None:
+                previous = self._volume_before_mute
+                try:
+                    await self._audio.set_volume(previous)
+                    self._volume_before_mute = None
+                    logger.info("Restored absolute volume to %.1f.", previous)
+                    return
+                except Exception as exc:
+                    logger.info("Could not restore absolute volume; using buttons: %s", exc)
+
+            logger.info("Unmuting: %d x volume_up", config.UNMUTE_STEPS)
+            await self._volume_press("volume_up", config.UNMUTE_STEPS)
+            self._volume_before_mute = None
+            logger.info("Unmuted.")
 
     # ------------------------------------------------------------------
     # Skip forward
@@ -221,13 +283,15 @@ class AppleTVController(PlaybackController):
 
     async def skip_forward(self, count: int = 1):
         """Press skip_forward `count` times (~15s each)."""
-        logger.info("Skipping forward: %d x skip_forward", count)
-        for i in range(count):
-            await self._remote.skip_forward()
-            logger.debug("skip_forward (%d/%d)", i + 1, count)
-            if i < count - 1:
-                await asyncio.sleep(config.SKIP_COMMAND_DELAY)
-        logger.info("Skip complete.")
+        async with self._command_lock:
+            self._require_connection()
+            logger.info("Skipping forward: %d x skip_forward", count)
+            for i in range(count):
+                await self._remote.skip_forward()
+                logger.debug("skip_forward (%d/%d)", i + 1, count)
+                if i < count - 1:
+                    await asyncio.sleep(config.SKIP_COMMAND_DELAY)
+            logger.info("Skip complete.")
 
     async def seek_forward(self, taps: int = 5):
         """Seek forward using trackpad right + select (for sponsored overlays).
@@ -235,12 +299,14 @@ class AppleTVController(PlaybackController):
         Simulates pressing the right side of the Siri Remote trackpad
         to move the seek bar, then select to confirm.
         """
-        logger.info("Seek forward: %d x right + select", taps)
-        for i in range(taps):
-            await self._remote.right()
-            await asyncio.sleep(0.15)
-        await self._remote.select()
-        logger.info("Seek complete.")
+        async with self._command_lock:
+            self._require_connection()
+            logger.info("Seek forward: %d x right + select", taps)
+            for _ in range(taps):
+                await self._remote.right()
+                await asyncio.sleep(0.15)
+            await self._remote.select()
+            logger.info("Seek complete.")
 
 
 # ----------------------------------------------------------------------

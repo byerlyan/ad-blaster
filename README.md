@@ -8,7 +8,7 @@ Automatically mutes (or fast forwards through) commercial breaks on live or "tap
 **TL;DR on how my personal setup works:** 
 * an HDMI splitter sends a copy of the Apple TV's video to a USB capture card on a linux box
 * screenshots from the video are checked for the channel's corner logo (present during the game, gone during ads) and/or color profile (lots of hardwood color for basketball games, grass color for football, etc)
-* When the logo disappears it **mutes my soundbar** (live viewing) or **skips forward** (delayed viewing) until the right profile (logo + color profile) comes back
+* When the logo disappears it can **mute the soundbar**, **skip forward on delayed playback**, or do both; mute and skip are independent settings
 
 That's it! I messed around with training a model but found the simple threshold based setup easier to use.
 
@@ -168,7 +168,7 @@ The software controls the Apple TV with [pyatv](https://pyatv.dev/) over the net
    This saves `credentials.json` (ignored by git since it's machine specific and contains your pairing keys).
 
 ### Volume control is specific to your setup
-My muting works by spamming the Apple TV's `volume_down` (and `volume_up` to restore) via pyatv. The defaults (`MUTE_STEPS`, `UNMUTE_STEPS` in `config.py`) are tuned so 10 presses fully mutes and 7 restores a normal level. You'll likely need to mess around with these settings to figure out what works for you.
+The pyatv backend first tries absolute volume control, remembering and restoring the exact pre-commercial level. Apple TV/audio-output combinations that do not expose absolute volume automatically fall back to repeated `volume_down` and `volume_up` commands. Tune `MUTE_STEPS` and `UNMUTE_STEPS` in Advanced settings only when your setup uses that fallback.
 
 ### Using a different playback device
 The included control backend is for Apple TV (via pyatv), selected by `CONTROLLER_BACKEND="appletv"` in `config.py`. I haven't tried, but I imagine it's possible to drive another device in a similar way (a CEC controlled TV/soundbar, a Roku, a Fire TV, an IR blaster, …):
@@ -176,7 +176,7 @@ The included control backend is for Apple TV (via pyatv), selected by `CONTROLLE
 1. In `intervention.py`, subclass `PlaybackController` and implement the async methods: `connect`, `disconnect`, `get_playback_status`, `mute`, `unmute`, `skip_forward`, `seek_forward`.
 2. Register it with a name in `make_controller()`, and set `CONTROLLER_BACKEND` (or the `CONTROLLER_BACKEND` env var) to that name.
 
-Notes: `get_playback_status` is what decides live vs delayed. If your device can't report playback position, return zeros and set `PLAYBACK_MODE_OVERRIDE="live"` so the engine only ever mutes (a device that can't skip should also implement `skip_forward`/`seek_forward` to do nothing and run live/mute only). Calibration, presets, and the dashboard are all unchanged. Only the control backend differs.
+Notes: `get_playback_status` decides whether skipping is safe. If your device cannot report playback position, leave automatic skipping off; automatic muting remains fully usable. A device that cannot skip should also implement `skip_forward` and `seek_forward` as no-ops. Calibration, presets, and the dashboard are unchanged. Only the control backend differs.
 
 ---
 
@@ -203,10 +203,11 @@ Theoretically you should only need to do this once per channel, but I've gotten 
   - **Home**: status, Start / Pause / Stop, manual mute/unmute, and one-tap Program/Commercial corrections with undo.
   - **Activity**: detector decisions, actions, reasons, and saved corrections.
   - **Calibration**: profile diagnostics, capture check, touch ROI selection, resize handles, pinch zoom, and numeric coordinates.
-  - **Settings**: Basic by default (mode, sensitivity, automatic muting, shadow preference, profile/devices); Advanced exposes detector, subsystem, fusion, intervention, and safety controls.
+  - **Settings**: Basic by default (mode, sensitivity, independent mute/skip controls, shadow preference, profile/devices); Advanced exposes detector, subsystem, fusion, intervention, and safety controls.
   - **Diagnostics**: detector health and the direct-access private-LAN address/QR.
 - **Start** picks up the selected channel's profile and begins. **Shadow** mode detects without touching the TV (great for testing).
-- Live vs delayed is detected automatically: **live → mute**, **delayed → skip forward**.
+- Muting and skipping are independent. With **Mute detected commercials** on and **Skip commercials** off, every detected break is mute-only—even during delayed playback.
+- Skipping is opt-in and is attempted only when pyatv reports delayed/DVR playback. Live playback is never skipped. If both controls are enabled, delayed breaks mute immediately while the skip loop runs, then restore the previous volume.
 - On the first visit, a six-step wizard walks through capture, Apple TV pairing, detection mode, calibration, shadow validation, and enabling automatic control.
 
 ### Sensitivity presets (Settings)

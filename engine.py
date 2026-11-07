@@ -381,19 +381,47 @@ class Engine:
             return DetectionState.COMMERCIAL
         return self._detection_state
 
-    def _set_intervention_mode(self, mode: "PlaybackMode | None"):
-        """Set the playback mode and enable break length decay only for LIVE
-        (mute) viewing. In skip mode wall clock time doesn't track the
-        broadcast break length, so the decay curve doesn't apply."""
+    def _set_intervention_mode(
+        self,
+        mode: "PlaybackMode | None",
+        *,
+        skipping: bool | None = None,
+    ):
+        """Record playback mode and configure wall-clock break decay.
+
+        Playback mode and intervention are separate: delayed playback can be
+        muted without being skipped. Decay is disabled only while the engine
+        is actually skipping, because then wall-clock time no longer tracks
+        the commercial break. The default preserves the legacy callers.
+        """
         self._mode = mode
+        if skipping is None:
+            skipping = mode == PlaybackMode.DELAYED
         if self._detector is not None:
-            self._detector.set_break_decay(mode == PlaybackMode.LIVE)
+            self._detector.set_break_decay(mode is not None and not skipping)
 
     def _check_interval(self) -> float:
         return (
             config.HYBRID_FRAME_CHECK_INTERVAL
             if self._detection_mode == "hybrid"
             else config.FRAME_CHECK_INTERVAL
+        )
+
+    @staticmethod
+    def _automatic_intervention_actions(
+        mode: "PlaybackMode | None",
+    ) -> tuple[bool, bool]:
+        """Return independent (mute, skip) decisions for a commercial.
+
+        Muting applies to any playback mode. Skipping additionally requires a
+        positive delayed-playback signal; unknown and live always fail safe.
+        """
+        return (
+            bool(config.AUTOMATIC_MUTING_ENABLED),
+            bool(
+                config.AUTOMATIC_SKIPPING_ENABLED
+                and mode == PlaybackMode.DELAYED
+            ),
         )
 
     async def _controller_action(self, method: str, *args):
@@ -1212,9 +1240,12 @@ class Engine:
                     self._events.append({"t": round(time.time(), 1), "type": "commercial_start"})
 
                     if intervening:
-                        # Always mute first
-                        logger.info("Muting.")
-                        if config.AUTOMATIC_MUTING_ENABLED and await self._mute_if_needed():
+                        # Muting and skipping are independent policies. Mute
+                        # does not need playback metadata and is therefore
+                        # still useful when an app does not report position.
+                        should_mute, _ = self._automatic_intervention_actions(None)
+                        if should_mute and await self._mute_if_needed():
+                            logger.info("Automatic commercial mute active.")
                             self._stats["mutes"] += 1
                             self._events.append({
                                 "t": round(time.time(), 1),
@@ -1222,22 +1253,45 @@ class Engine:
                                 "reason": "commercial_start",
                             })
 
-                        if config.PLAYBACK_MODE_OVERRIDE:
-                            commercial_mode = PlaybackMode(config.PLAYBACK_MODE_OVERRIDE)
-                            logger.info("Mode override: %s", commercial_mode.value)
+                        # Playback metadata is advisory for mute-only mode and
+                        # required before a skip. If unavailable, fail safe to
+                        # LIVE: keep muting if requested, but never guess that
+                        # seeking is safe.
+                        if (
+                            config.AUTOMATIC_MUTING_ENABLED
+                            or config.AUTOMATIC_SKIPPING_ENABLED
+                        ):
+                            if config.PLAYBACK_MODE_OVERRIDE:
+                                commercial_mode = PlaybackMode(config.PLAYBACK_MODE_OVERRIDE)
+                                logger.info("Mode override: %s", commercial_mode.value)
+                            else:
+                                try:
+                                    status = await self._controller_action("get_playback_status")
+                                    commercial_mode = status.mode
+                                except Exception as exc:
+                                    commercial_mode = PlaybackMode.LIVE
+                                    logger.warning(
+                                        "Playback mode unavailable; suppressing skip: %s", exc
+                                    )
                         else:
-                            status = await self._controller_action("get_playback_status")
-                            commercial_mode = status.mode
-                        self._set_intervention_mode(commercial_mode)
+                            commercial_mode = None
 
-                        if commercial_mode == PlaybackMode.DELAYED:
-                            logger.info("Mode: DELAYED, also skipping.")
+                        _, should_skip = self._automatic_intervention_actions(commercial_mode)
+                        self._set_intervention_mode(
+                            commercial_mode,
+                            skipping=should_skip,
+                        )
+
+                        if should_skip:
+                            logger.info("Mode: DELAYED, automatic skipping active.")
                             self._stats["skips"] += 1
                             self._events.append({"t": round(time.time(), 1), "type": "skip"})
                             await self._skip_loop()
-                            # Unmute after skip loop, the show should be back
-                            logger.info("Skip loop done, unmuting.")
-                            if config.AUTOMATIC_MUTING_ENABLED and await self._unmute_if_needed():
+                            # If mute was also enabled, restore after the skip
+                            # loop. Checking actual state handles a setting
+                            # change while a break is in progress.
+                            if self._muted_by_engine and await self._unmute_if_needed():
+                                logger.info("Skip loop done; volume restored.")
                                 self._events.append({
                                     "t": round(time.time(), 1),
                                     "type": "unmute",
@@ -1245,8 +1299,12 @@ class Engine:
                                 })
                             self._commercial_start = None
                             commercial_mode = None
+                        elif config.AUTOMATIC_MUTING_ENABLED:
+                            logger.info("Mute-only intervention; waiting for program to resume.")
+                        elif config.AUTOMATIC_SKIPPING_ENABLED:
+                            logger.info("Live playback cannot be skipped; no action taken.")
                         else:
-                            logger.info("Mode: LIVE, muted, waiting for show to resume.")
+                            logger.info("Automatic mute and skip are both disabled.")
                     elif (
                         self._state == EngineState.RUNNING
                         and not self._shadow
@@ -1269,7 +1327,7 @@ class Engine:
                     self._stats["total_commercial_time"] += duration
                     self._events.append({"t": round(time.time(), 1), "type": "commercial_end"})
 
-                    if intervening and config.AUTOMATIC_MUTING_ENABLED:
+                    if intervening and self._muted_by_engine:
                         logger.info("Unmuting.")
                         if await self._unmute_if_needed():
                             self._events.append({
@@ -1295,7 +1353,7 @@ class Engine:
                     self._detector.reset()
                     self._detection_state = DetectionState.WATCHING
 
-                    if intervening and commercial_mode == PlaybackMode.LIVE:
+                    if intervening and self._muted_by_engine:
                         await self._unmute_if_needed()
 
                     self._set_intervention_mode(None)

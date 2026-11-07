@@ -119,6 +119,7 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
   <nav class="toc" aria-label="On this page">
     <p class="toc-label">On this page</p>
     <a href="#quick-start">Quick start</a>
+    <a href="#interventions">Mute and skip</a>
     <a href="#legacy">Legacy system</a>
     <a href="#streaming">Streaming / no logo</a>
     <a href="#labels">Labels and markers</a>
@@ -150,6 +151,17 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
         <article class="card step"><span class="step-number">5</span><div><h3>Train and compare Hybrid</h3><p>Export the labeled features, train the local model, enable the ML Classifier, and run Hybrid in Shadow mode.</p></div></article>
         <article class="card step"><span class="step-number">6</span><div><h3>Enable control conservatively</h3><p>Only after Shadow results look correct, enable automatic muting. Start with the Conservative sensitivity preset.</p></div></article>
       </div>
+    </section>
+
+    <section id="interventions">
+      <p class="eyebrow">Independent Apple TV actions</p>
+      <h2>Choose muting and skipping separately</h2>
+      <p class="section-intro">Detection decides whether the picture looks like a commercial. Two separate settings decide what The Clicker does about it.</p>
+      <div class="grid">
+        <article class="card"><h3>Mute detected commercials</h3><p>Works for both live and delayed playback and does not depend on playback-position metadata. pyatv restores the exact prior volume when absolute volume is supported, with button presses as a compatibility fallback.</p></article>
+        <article class="card"><h3>Skip delayed commercials</h3><p>Opt-in and delayed-only. The Clicker checks pyatv playback position before seeking. If the position is unavailable or playback is live, it suppresses the skip.</p></article>
+      </div>
+      <div class="callout"><strong>For mute-only operation:</strong> turn on <em>Mute detected commercials</em> and leave <em>Skip commercials on delayed playback</em> off. This works even while watching a recorded or time-shifted show.</div>
     </section>
 
     <section id="legacy">
@@ -295,7 +307,7 @@ python3 scripts/train_commercial_model.py \
       <details><summary>Hybrid has no audio evidence</summary><p>Use Diagnostics to verify the configured audio input. On macOS, a capture card may expose video under one device name and audio under another. Legacy visual detection can continue without audio.</p></details>
       <details><summary>Intel macOS shows no capture devices</summary><p>Rerun <code>bash deploy/setup-macos-intel.sh</code>. On Monterey, allow The Clicker’s MacPorts Python process in System Preferences → Security &amp; Privacy → Privacy → Camera, then restart the LaunchAgent. The device check now reports camera permission and AVFoundation backend failures separately.</p></details>
       <details><summary>Ad overlay OCR is unavailable</summary><p>Install Tesseract, restart The Clicker, and verify <code>tesseract --version</code> works. The macOS and Debian deployment scripts install it automatically.</p></details>
-      <details><summary>Automatic muting made a bad decision</summary><p>Select Disarm, turn automatic muting off, and return to Shadow mode. Review the active profile and Activity reason before changing thresholds or adding more training data.</p></details>
+      <details><summary>Automatic control made a bad decision</summary><p>Select Disarm, turn automatic muting and skipping off, and return to Shadow mode. Review the active profile and Activity reason before changing thresholds or adding more training data.</p></details>
     </section>
 
     <footer class="footer">The Clicker runs its detector, training data, model, and trusted fingerprints locally.</footer>
