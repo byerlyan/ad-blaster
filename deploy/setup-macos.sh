@@ -219,8 +219,8 @@ fi
 "$VENV_DIR/bin/python3" -m pip install --quiet --upgrade pip
 "$VENV_DIR/bin/python3" -m pip install --quiet -r "$INSTALL_DIR/$REQUIREMENTS_NAME"
 if [ "$PACKAGE_MANAGER" = "macports" ]; then
-    if ! "$VENV_DIR/bin/python3" -c 'import AVFoundation, cv2, numpy' >/dev/null 2>&1; then
-        echo "MacPorts Python cannot import AVFoundation, OpenCV, and NumPy." >&2
+    if ! "$VENV_DIR/bin/python3" -c 'import AVFoundation, cv2, numpy; assert cv2.videoio_registry.hasBackend(cv2.CAP_AVFOUNDATION)' >/dev/null 2>&1; then
+        echo "MacPorts Python cannot use the OpenCV AVFoundation capture backend." >&2
         echo "Verify that py312-pyobjc and py312-opencv4 are active, then rerun." >&2
         exit 1
     fi

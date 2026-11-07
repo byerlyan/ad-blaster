@@ -33,35 +33,38 @@ def _is_apple_tv(config) -> bool:
 
 def list_capture_devices() -> list[dict]:
     if platform.system() == "Darwin":
-        try:
-            from AVFoundation import (
-                AVCaptureDeviceDiscoverySession,
-                AVCaptureDevicePositionUnspecified,
-                AVCaptureDeviceTypeBuiltInWideAngleCamera,
-                AVCaptureDeviceTypeExternal,
-                AVMediaTypeMuxed,
-                AVMediaTypeVideo,
-            )
-            types = [AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeExternal]
-            devices = []
-            seen = set()
-            for media in (AVMediaTypeVideo, AVMediaTypeMuxed):
-                session = AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
-                    types, media, AVCaptureDevicePositionUnspecified
-                )
-                for device in session.devices():
-                    uid = str(device.uniqueID())
-                    if uid not in seen:
-                        seen.add(uid)
-                        devices.append({"id": uid, "name": str(device.localizedName())})
-            return devices
-        except Exception:
-            return []
+        return capture_device_diagnostics()["devices"]
     return [
         {"id": str(path), "name": path.name}
         for path in sorted(Path("/dev").glob("video*"))
         if os.access(path, os.R_OK)
     ]
+
+
+def capture_device_diagnostics() -> dict:
+    """Return device enumeration plus actionable macOS backend diagnostics."""
+    if platform.system() != "Darwin":
+        return {"devices": list_capture_devices(), "permission": "not_applicable"}
+    try:
+        from capture import (
+            camera_authorization_status,
+            discover_avfoundation_devices,
+            opencv_avfoundation_available,
+        )
+
+        return {
+            "devices": discover_avfoundation_devices(),
+            "permission": camera_authorization_status(),
+            "backend_available": opencv_avfoundation_available(),
+        }
+    except Exception as exc:
+        logger.exception("Could not enumerate macOS capture devices")
+        return {
+            "devices": [],
+            "permission": "unknown",
+            "backend_available": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 class AppleTVSetup:

@@ -237,6 +237,7 @@ The Diagnostics QR opens the local URL. After pairing, use Safari or Chrome's **
 
 | Symptom | Likely cause / fix |
 |---|---|
+| **Intel macOS reports no video inputs** | Pull the latest code and rerun `bash deploy/setup-macos-intel.sh`. On Monterey, allow The Clicker's MacPorts Python process under **System Preferences → Security & Privacy → Privacy → Camera**, then restart the LaunchAgent. Monterey uses the older external-camera API, which this path handles automatically. |
 | **Capture is black / blank** | HDCP on the HDMI feed, or capture card not seated in a USB 3.0 port. |
 | **"Permission denied" / `/dev/video0` won't open** | Pi / bare metal: run the service as root (the installer's default) or add your user to the `video` group. Proxmox LXC: apply the host udev rule. |
 | **No `/dev/video*` at all** | Capture card not in a USB 3.0 port (or, in a Proxmox LXC, passthrough not configured). Check `lsusb` / `v4l2-ctl --list-devices`. |

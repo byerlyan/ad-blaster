@@ -932,6 +932,12 @@ async function correctNow(label){try{const r=await api('POST','/api/corrections'
 async function undoLastCorrection(){if(!lastCorrectionId)return;try{await api('POST','/api/corrections/'+encodeURIComponent(lastCorrectionId)+'/undo');document.getElementById('correction-undo').classList.add('hidden');showSuccess('Correction undone.');await loadActivity()}catch(e){showError(e.message)}}
 
 function captureCheckResult(r){
+  if(r.permission==='denied'||r.permission==='restricted'){
+    return {ok:false,message:'Camera access is '+r.permission+'. On Monterey, allow The Clicker’s Python process in System Preferences → Security & Privacy → Privacy → Camera, then restart The Clicker.'};
+  }
+  if(r.backend_available===false){
+    return {ok:false,message:'OpenCV was installed without the AVFoundation video backend. Reinstall the Intel dependencies with deploy/setup-macos-intel.sh.'+(r.error?' '+r.error:'')};
+  }
   if(r.found&&r.frame){
     return {ok:true,message:'Capture card OK: "'+r.device_name+'" at index '+r.index+(r.resolution?' ('+r.resolution+')':'')};
   }
@@ -939,7 +945,8 @@ function captureCheckResult(r){
     return {ok:false,message:'Capture card found at index '+r.index+' but no signal. Check the HDMI connection.'+(r.error?' '+r.error:'')};
   }
   const devs=r.available_devices&&r.available_devices.length?' Available devices: '+r.available_devices.join(', ')+'.':'';
-  return {ok:false,message:'"'+r.device_name+'" was not found.'+devs};
+  const permission=r.permission==='not_determined'?' Camera access has not been granted yet; check once to trigger the macOS prompt.':'';
+  return {ok:false,message:'"'+r.device_name+'" was not found.'+devs+permission+(r.error?' '+r.error:'')};
 }
 
 async function checkCapture(){
@@ -996,7 +1003,8 @@ async function scanWizardCaptureDevices(){
       status.className='wizard-check-status';status.textContent='';
     }else{
       select.innerHTML='<option value="">No video inputs found</option>';
-      status.className='wizard-check-status error';status.textContent='No video inputs were found. Connect the capture card, allow camera access, then refresh.';
+      const permission=r.permission==='denied'||r.permission==='restricted'?' Camera access is '+r.permission+'; on Monterey, allow The Clicker’s Python process in System Preferences → Security & Privacy → Privacy → Camera.':r.permission==='not_determined'?' Camera access has not been granted yet.':'',backend=r.backend_available===false?' This OpenCV build has no AVFoundation backend. Re-run the macOS installer.':'';
+      status.className='wizard-check-status error';status.textContent='No video inputs were found.'+permission+backend+(r.error?' '+r.error:' Connect the capture card, then refresh.');
     }
   }catch(e){
     select.innerHTML='<option value="">Unable to scan devices</option>';

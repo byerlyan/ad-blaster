@@ -16,6 +16,133 @@ import config
 logger = logging.getLogger(__name__)
 
 
+def _objc_value(obj, name: str, default=None):
+    value = getattr(obj, name, default)
+    return value() if callable(value) else value
+
+
+def camera_authorization_status() -> str:
+    """Return the macOS camera authorization state without prompting."""
+    if platform.system() != "Darwin":
+        return "not_applicable"
+    try:
+        import AVFoundation as av
+
+        status = av.AVCaptureDevice.authorizationStatusForMediaType_(
+            av.AVMediaTypeVideo
+        )
+        mapping = {
+            int(getattr(av, "AVAuthorizationStatusNotDetermined", 0)): "not_determined",
+            int(getattr(av, "AVAuthorizationStatusRestricted", 1)): "restricted",
+            int(getattr(av, "AVAuthorizationStatusDenied", 2)): "denied",
+            int(getattr(av, "AVAuthorizationStatusAuthorized", 3)): "authorized",
+        }
+        return mapping.get(int(status), f"unknown_{int(status)}")
+    except Exception as exc:
+        logger.warning("Could not inspect camera authorization: %s", exc)
+        return "unknown"
+
+
+def opencv_avfoundation_available() -> bool:
+    """Whether this OpenCV build exposes its AVFoundation capture backend."""
+    if platform.system() != "Darwin":
+        return False
+    try:
+        registry = getattr(cv2, "videoio_registry", None)
+        if registry is not None and hasattr(registry, "hasBackend"):
+            return bool(registry.hasBackend(cv2.CAP_AVFOUNDATION))
+        return "AVFoundation: YES" in cv2.getBuildInformation()
+    except Exception:
+        return False
+
+
+def discover_avfoundation_devices() -> list[dict]:
+    """Enumerate macOS video devices in the order OpenCV uses for indices.
+
+    Monterey exposes ``AVCaptureDeviceTypeExternalUnknown`` while newer macOS
+    releases expose ``AVCaptureDeviceTypeExternal``. Importing the latter by
+    name on Monterey makes the entire scan fail, so constants are selected at
+    runtime. The legacy ``devicesWithMediaType`` order is preferred because
+    OpenCV's macOS backend uses that same ordering for integer device indices.
+    """
+    if platform.system() != "Darwin":
+        return []
+
+    import AVFoundation as av
+
+    devices = []
+    capture_device = av.AVCaptureDevice
+    devices_for_media = getattr(capture_device, "devicesWithMediaType_", None)
+    if callable(devices_for_media):
+        for media_type in (
+            av.AVMediaTypeVideo,
+            getattr(av, "AVMediaTypeMuxed", None),
+        ):
+            if media_type is None:
+                continue
+            try:
+                devices.extend(list(devices_for_media(media_type)))
+            except Exception:
+                logger.debug("Legacy AVFoundation enumeration failed", exc_info=True)
+
+    # Newer PyObjC/SDK combinations can remove the deprecated class method.
+    # DiscoverySession is the fallback, with device types chosen by OS support.
+    if not devices:
+        discovery = getattr(av, "AVCaptureDeviceDiscoverySession", None)
+        if discovery is not None:
+            device_types = []
+            for constant_name in (
+                "AVCaptureDeviceTypeBuiltInWideAngleCamera",
+                "AVCaptureDeviceTypeExternal",
+                "AVCaptureDeviceTypeExternalUnknown",
+            ):
+                value = getattr(av, constant_name, None)
+                if value is not None and value not in device_types:
+                    device_types.append(value)
+            for media_type in (
+                av.AVMediaTypeVideo,
+                getattr(av, "AVMediaTypeMuxed", None),
+            ):
+                if media_type is None:
+                    continue
+                session = discovery.discoverySessionWithDeviceTypes_mediaType_position_(
+                    device_types,
+                    media_type,
+                    av.AVCaptureDevicePositionUnspecified,
+                )
+                devices.extend(list(session.devices()))
+
+    unique_devices = []
+    seen = set()
+    for device in devices:
+        unique_id = str(_objc_value(device, "uniqueID", ""))
+        name = str(_objc_value(device, "localizedName", "Unknown camera"))
+        identity = unique_id or name
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique_devices.append((identity, unique_id, name, device))
+
+    # OpenCV's cap_avfoundation_mac.mm sorts the combined video/muxed list by
+    # uniqueID before resolving its integer camera index. Mirror it exactly.
+    unique_devices.sort(key=lambda item: item[0])
+    result = []
+    for identity, unique_id, name, device in unique_devices:
+        result.append(
+            {
+                "id": unique_id or name,
+                "name": name,
+                "index": len(result),
+                "model_id": str(_objc_value(device, "modelID", "")),
+                "connected": bool(_objc_value(device, "isConnected", True)),
+                "in_use": bool(
+                    _objc_value(device, "isInUseByAnotherApplication", False)
+                ),
+            }
+        )
+    return result
+
+
 def _find_capture_card_index(expected_name: str | None = None) -> int | None:
     """Find the OpenCV index for a capture device by its AVFoundation name.
 
@@ -30,46 +157,17 @@ def _find_capture_card_index(expected_name: str | None = None) -> int | None:
         expected_name = config.CAPTURE_DEVICE_NAME
 
     try:
-        from AVFoundation import (
-            AVCaptureDeviceDiscoverySession,
-            AVCaptureDevicePositionUnspecified,
-            AVCaptureDeviceTypeBuiltInWideAngleCamera,
-            AVCaptureDeviceTypeExternal,
-            AVMediaTypeMuxed,
-            AVMediaTypeVideo,
-        )
-
-        device_types = [
-            AVCaptureDeviceTypeBuiltInWideAngleCamera,
-            AVCaptureDeviceTypeExternal,
-        ]
-
-        video_session = AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
-            device_types, AVMediaTypeVideo, AVCaptureDevicePositionUnspecified
-        )
-        muxed_session = AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
-            device_types, AVMediaTypeMuxed, AVCaptureDevicePositionUnspecified
-        )
-
-        seen_ids = set()
-        all_devices = []
-        for d in list(video_session.devices()) + list(muxed_session.devices()):
-            uid = d.uniqueID()
-            if uid not in seen_ids:
-                seen_ids.add(uid)
-                all_devices.append(d)
-
-        all_devices.sort(key=lambda d: d.uniqueID())
-
-        for i, device in enumerate(all_devices):
-            if device.localizedName() == expected_name:
+        devices = discover_avfoundation_devices()
+        wanted = str(expected_name).strip().casefold()
+        for device in devices:
+            if device["name"].strip().casefold() == wanted:
                 logger.info(
                     "Found '%s' at OpenCV index %d (uniqueID=%s)",
-                    expected_name, i, device.uniqueID(),
+                    expected_name, device["index"], device["id"],
                 )
-                return i
+                return int(device["index"])
 
-        available = [(d.localizedName(), d.uniqueID()) for d in all_devices]
+        available = [(d["name"], d["id"]) for d in devices]
         logger.warning("Device '%s' not found. Available: %s", expected_name, available)
 
     except ImportError:
@@ -86,11 +184,16 @@ class FrameCapture:
     def __init__(self, device=None):
         # CAPTURE_DEVICE can be updated by the setup wizard at runtime.
         self._device = config.CAPTURE_DEVICE if device is None else device
+        self._resolve_by_name = device is None
         self._cap = None
 
     def open(self):
         """Open the capture device."""
-        if platform.system() == "Darwin" and isinstance(self._device, int):
+        if (
+            platform.system() == "Darwin"
+            and isinstance(self._device, int)
+            and self._resolve_by_name
+        ):
             # Find capture card by name to avoid index instability
             idx = _find_capture_card_index()
             if idx is not None:
@@ -121,11 +224,15 @@ class FrameCapture:
 
         actual_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if actual_w <= 0 or actual_h <= 0:
+            raise RuntimeError("Capture device opened but did not report a video resolution")
         if actual_w != config.CAPTURE_WIDTH or actual_h != config.CAPTURE_HEIGHT:
-            raise RuntimeError(
-                f"Capture device resolution mismatch: got {actual_w}x{actual_h}, "
-                f"expected {config.CAPTURE_WIDTH}x{config.CAPTURE_HEIGHT}. "
-                f"Check device settings or update CAPTURE_WIDTH/CAPTURE_HEIGHT in config.py."
+            logger.warning(
+                "Capture device uses %dx%d instead of requested %dx%d; continuing",
+                actual_w,
+                actual_h,
+                config.CAPTURE_WIDTH,
+                config.CAPTURE_HEIGHT,
             )
         logger.info("Capture device opened. Resolution: %dx%d", actual_w, actual_h)
 

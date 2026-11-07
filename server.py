@@ -28,7 +28,11 @@ from calibrate import delete_profile
 from capture import FrameCapture
 from corrections import CorrectionStore
 from dashboard_auth import DashboardAuth, SESSION_COOKIE
-from device_setup import AppleTVPairingError, AppleTVSetup, list_capture_devices
+from device_setup import (
+    AppleTVPairingError,
+    AppleTVSetup,
+    capture_device_diagnostics,
+)
 from engine import Engine
 
 logger = logging.getLogger(__name__)
@@ -471,8 +475,9 @@ async def activity(limit: int = 100):
 
 @app.get("/api/devices/capture")
 async def capture_devices():
+    diagnostics = await asyncio.to_thread(capture_device_diagnostics)
     return {
-        "devices": await asyncio.to_thread(list_capture_devices),
+        **diagnostics,
         "selected": (
             config.CAPTURE_DEVICE_NAME
             if platform.system() == "Darwin"
@@ -1103,7 +1108,19 @@ async def capture_check():
     import platform
     from capture import _find_capture_card_index
 
-    result = {"found": False, "device_name": config.CAPTURE_DEVICE_NAME, "index": None, "frame": False, "resolution": None}
+    diagnostics = await asyncio.to_thread(capture_device_diagnostics)
+    result = {
+        "found": False,
+        "device_name": config.CAPTURE_DEVICE_NAME,
+        "index": None,
+        "frame": False,
+        "resolution": None,
+        "permission": diagnostics.get("permission"),
+        "backend_available": diagnostics.get("backend_available"),
+        "available_devices": [item["name"] for item in diagnostics.get("devices", [])],
+    }
+    if diagnostics.get("error"):
+        result["error"] = diagnostics["error"]
 
     if platform.system() == "Darwin":
         idx = _find_capture_card_index()
@@ -1126,21 +1143,6 @@ async def capture_check():
             finally:
                 if cap:
                     cap.close()
-        else:
-            # List what we can see
-            try:
-                from AVFoundation import (
-                    AVCaptureDeviceDiscoverySession, AVCaptureDevicePositionUnspecified,
-                    AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeExternal,
-                    AVMediaTypeVideo,
-                )
-                session = AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
-                    [AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeExternal],
-                    AVMediaTypeVideo, AVCaptureDevicePositionUnspecified,
-                )
-                result["available_devices"] = [d.localizedName() for d in session.devices()]
-            except Exception:
-                pass
     else:
         # Linux, just check if device path exists
         import os
