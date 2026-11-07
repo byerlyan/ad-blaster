@@ -125,6 +125,18 @@ installer. The Intel path uses a separate `venv-macports` environment, so it
 does not overwrite an existing Homebrew environment. The script itself runs as
 your user and requests `sudo` only when MacPorts installs or updates packages.
 
+For optional model training, stay inside the installed MacPorts environment;
+do not use Monterey's Command Line Tools Python:
+
+```bash
+cd "$HOME/Library/Application Support/The Clicker"
+./venv-macports/bin/python3 -m pip install -r requirements-ml.txt
+./venv-macports/bin/python3 scripts/export_feature_dataset.py --output data/features.csv
+./venv-macports/bin/python3 scripts/train_commercial_model.py \
+  --dataset data/features.csv \
+  --output data/commercial_model.joblib
+```
+
 ```bash
 # Inspect, restart, or stop the LaunchAgent
 launchctl print gui/$(id -u)/com.theclicker.app

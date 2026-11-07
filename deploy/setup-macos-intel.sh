@@ -24,6 +24,11 @@ Environment overrides:
   CLICKER_INSTALL_DIR       App directory (default: ~/Library/Application Support/The Clicker)
   CLICKER_MACPORTS_PREFIX   MacPorts prefix (default: /opt/local)
   CLICKER_PORT              Dashboard port (default: 8080)
+
+Optional ML training after installation:
+  cd "$HOME/Library/Application Support/The Clicker"
+  ./venv-macports/bin/python3 -m pip install -r requirements-ml.txt
+  ./venv-macports/bin/python3 scripts/export_feature_dataset.py --output data/features.csv
 EOF
 }
 

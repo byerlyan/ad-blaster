@@ -121,6 +121,7 @@ Install optional training dependencies:
 
 # Installed app: use ./venv/bin/python3 on Apple silicon/Linux, or
 # ./venv-macports/bin/python3 on an Intel MacPorts installation.
+./venv-macports/bin/python3 -m pip install -r requirements-ml.txt
 ```
 
 Use **Mark Content** and **Mark Commercial** across multiple recordings and
@@ -140,6 +141,8 @@ Export and train:
 Use the corresponding `venv` or `venv-macports` executable when running from
 an installed copy. Do not mix the virtual environment with macOS Command Line
 Tools Python; `python3` in the shell may refer to a different installation.
+On Intel macOS, run the same export and training commands with
+`./venv-macports/bin/python3` from the installed application directory.
 
 Training uses standardized logistic regression with Platt calibration, suitable
 for an older Intel CPU. Fit, calibration, and test partitions are separated by

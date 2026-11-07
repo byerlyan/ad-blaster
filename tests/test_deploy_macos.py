@@ -40,6 +40,7 @@ def test_macos_installer_uses_user_launch_agent_and_preserves_runtime_state():
     assert 'ffmpeg tesseract' in script
     assert "audio.py ad_overlay.py" in script
     assert "ml.py ml_artifacts.py" in script
+    assert "scripts/train_commercial_model.py --dataset data/features.csv" in script
     assert '"TESSERACT_BINARY": tesseract_bin' in script
 
 
@@ -69,6 +70,9 @@ def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
         assert package in common
     assert "--system-site-packages" in common
     assert 'VENV_NAME="venv-macports"' in common
+    assert "ml.py ml_artifacts.py" in common
+    assert "venv-macports/bin/python3 -m pip install -r requirements-ml.txt" in result.stdout
+    assert "venv-macports/bin/python3 scripts/export_feature_dataset.py" in result.stdout
     assert "opencv-python" not in requirements
     assert "pyobjc-framework" not in requirements.lower()
     assert "fastapi>=0.110" in requirements
