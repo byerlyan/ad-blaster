@@ -227,6 +227,7 @@ EXIT_DECAY_MAX_FRAMES = 25            # cap on added exit debounce (~2.5s @ 10fp
 BREAK_DECAY_STRENGTH = 0.5            # 0=off .. 1=full; set by preset
 
 PROFILES_DIR = str(pathlib.Path(__file__).parent / "profiles")
+STREAMING_DEFAULT_PROFILE = "streaming-default"
 
 # ---------------------------------------------------------------------------
 # Session persistence

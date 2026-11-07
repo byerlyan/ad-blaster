@@ -130,7 +130,7 @@ def assert_audio_device_dropdown(page) -> None:
     page.locator("#bottom-btn-tune").tap()
     page.locator("#tab-tune").wait_for(state="visible")
     page.evaluate(
-        "() => { audioDevicesLoaded=false; settingsSnapshot.AUDIO_DEVICE_NAME=''; document.querySelector('#set-audio-device').value=''; setSettingsLevel('advanced'); }"
+        "async () => { audioDevicesLoaded=false; settingsSnapshot.AUDIO_DEVICE_NAME=''; document.querySelector('#set-audio-device').value=''; setSettingsLevel('advanced'); await scanAudioDevices(undefined,false); }"
     )
     page.wait_for_function(
         "() => document.querySelector('#set-audio-device').options.length === 3"
@@ -260,6 +260,73 @@ def assert_ml_model_inspection(page) -> None:
     assert "26 artifact features / 26 expected" in details
     assert "No successful inference recorded yet" in details
     page.unroute("**/api/ml/status")
+
+
+def assert_streaming_default_profile(page) -> None:
+    created = []
+    profiles = {
+        "profiles": ["streaming-default"],
+        "default_profile": "streaming-default",
+    }
+    details = {
+        "channel": "streaming-default",
+        "display_name": "Streaming Default",
+        "mode": "color",
+        "profile_role": "streaming_default",
+        "reusable_across_apps": True,
+        "overlay_focused": True,
+        "color_scope": "full_frame",
+        "color_match_threshold": 0.55,
+        "capture_source": "Test Capture",
+        "template_b64": None,
+        "edges_b64": None,
+        "palette_b64": None,
+    }
+
+    def create_profile(route):
+        created.append(route.request.post_data_json)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "ok": True,
+                    "channel": "streaming-default",
+                    "mode": "color",
+                    "profile_role": "streaming_default",
+                    "settings": {
+                        "DETECTION_MODE": "hybrid",
+                        "AD_OVERLAY_ENABLED": True,
+                        "HYBRID_LEGACY_VISUAL_ENABLED": True,
+                    },
+                }
+            ),
+        )
+
+    page.route("**/api/profiles/streaming-default", create_profile)
+    page.route(
+        "**/api/profiles",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(profiles)
+        ),
+    )
+    page.route(
+        "**/api/profile/streaming-default",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(details)
+        ),
+    )
+    page.evaluate("() => showTab('setup')")
+    page.locator("#btn-create-streaming-default").click()
+    page.wait_for_function(
+        "() => document.querySelector('#streaming-default-status').textContent.includes('ready')"
+    )
+    assert created and created[0]["duration"] > 0
+    assert page.evaluate("localStorage.getItem('selectedProfile')") == "streaming-default"
+    assert page.locator("#detection-mode").input_value() == "hybrid"
+    page.unroute("**/api/profiles/streaming-default")
+    page.unroute("**/api/profiles")
+    page.unroute("**/api/profile/streaming-default")
 
 
 def assert_control_mode_contract(page) -> None:
@@ -572,6 +639,7 @@ def run_engine(playwright, name: str):
                 assert_wizard_capture_feedback(page)
                 assert_wizard_appletv_pairing(page)
                 assert_wizard_detection_calibration_and_activation(page)
+                assert_streaming_default_profile(page)
                 page.locator("#bottom-btn-watch").tap()
                 page.route("**/api/status", lambda route: route.abort())
                 page.wait_for_timeout(2300)

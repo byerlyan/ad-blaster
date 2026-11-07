@@ -133,6 +133,10 @@ class ColorCalibrateRequest(BaseModel):
     duration: int | None = None
 
 
+class StreamingProfileRequest(BaseModel):
+    duration: int | None = None
+
+
 class ComboCalibrateRequest(BaseModel):
     """Combo profile: logo rect (required) + full frame color signal."""
     channel: str
@@ -549,13 +553,68 @@ async def list_profiles():
     """List all saved channel profiles."""
     profiles_dir = config.PROFILES_DIR
     if not os.path.exists(profiles_dir):
-        return {"profiles": []}
+        return {"profiles": [], "default_profile": None}
 
     profiles = []
     for f in os.listdir(profiles_dir):
         if f.endswith(".json"):
             profiles.append(f.removesuffix(".json"))
-    return {"profiles": sorted(profiles)}
+    profiles = sorted(profiles)
+    return {
+        "profiles": profiles,
+        "default_profile": (
+            config.STREAMING_DEFAULT_PROFILE
+            if config.STREAMING_DEFAULT_PROFILE in profiles
+            else None
+        ),
+    }
+
+
+@app.post("/api/profiles/streaming-default")
+async def create_streaming_default_profile(req: StreamingProfileRequest):
+    """Calibrate one reusable full-frame color profile for streaming apps."""
+    from calibrate import calibrate_color
+
+    profile_name = config.STREAMING_DEFAULT_PROFILE
+    try:
+        path = await asyncio.get_running_loop().run_in_executor(
+            None,
+            partial(calibrate_color, profile_name, None, duration=req.duration),
+        )
+        with open(path) as handle:
+            metadata = json.load(handle)
+        metadata.update(
+            {
+                "profile_role": "streaming_default",
+                "display_name": "Streaming Default",
+                "reusable_across_apps": True,
+                "overlay_focused": True,
+                "color_scope": "full_frame",
+            }
+        )
+        with open(path, "w") as handle:
+            json.dump(metadata, handle, indent=2)
+        settings = _apply_settings(
+            {
+                "DETECTION_MODE": "hybrid",
+                "AD_OVERLAY_ENABLED": True,
+                "HYBRID_LEGACY_VISUAL_ENABLED": True,
+            }
+        )
+        return {
+            "ok": True,
+            "channel": profile_name,
+            "path": path,
+            "mode": "color",
+            "profile_role": "streaming_default",
+            "settings": {
+                "DETECTION_MODE": settings["DETECTION_MODE"],
+                "AD_OVERLAY_ENABLED": settings["AD_OVERLAY_ENABLED"],
+                "HYBRID_LEGACY_VISUAL_ENABLED": settings["HYBRID_LEGACY_VISUAL_ENABLED"],
+            },
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.delete("/api/profile/{channel}")

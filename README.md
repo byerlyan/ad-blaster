@@ -307,6 +307,10 @@ The default `legacy` mode preserves the existing logo/color/combo behavior.
 The opt-in `hybrid` pipeline combines the existing visual profile with optional
 audio transitions, trusted local fingerprints, explicit on-screen ad-label OCR,
 and a lightweight trained model.
+For streaming apps without stable logos, Calibration can create one reusable
+**Streaming Default** profile. It samples full-frame program color once and
+automatically enables Hybrid plus ad-overlay OCR; validate it in Shadow mode
+before enabling control because color distributions still vary between shows.
 Start hybrid mode in shadow mode while evaluating it:
 
 ```bash
