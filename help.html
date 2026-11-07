@@ -237,8 +237,12 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
         <li>Repeat in several separate sessions. The first and last second of each window are automatically trimmed.</li>
       </ol>
       <h3>2. Install the optional training tools</h3>
-      <p>From the project or installed application directory:</p>
-      <div class="code-block"><pre><code>python3 -m pip install -r requirements-ml.txt</code></pre></div>
+      <p>Install them into the same Python environment that runs The Clicker. On Intel macOS, do not use Monterey’s <code>/usr/bin/python3</code> or Command Line Tools Python 3.9.</p>
+      <div class="code-block"><pre><code># Intel macOS / MacPorts installation
+./venv-macports/bin/python3 -m pip install -r requirements-ml.txt
+
+# Apple silicon macOS, Linux, or a project venv
+./venv/bin/python3 -m pip install -r requirements-ml.txt</code></pre></div>
       <h3>3. Export and train</h3>
       <p>You can download the raw CSV from <strong>Home → Training &amp; Trusted Ads</strong>, or run both commands locally:</p>
       <div class="code-block"><pre><code>python3 scripts/export_feature_dataset.py --output data/features.csv

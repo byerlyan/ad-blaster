@@ -1,6 +1,6 @@
--r requirements-dev.txt
-
-# Offline training/serialization only. Runtime inference loads the artifact
-# when these packages are installed and otherwise falls back safely.
+# Additive offline training/serialization dependencies. Install these into the
+# same environment that already runs The Clicker. Do not inherit the runtime or
+# test requirements here: the macOS installers provide OpenCV/PyObjC through
+# different package managers, and model training does not need test tooling.
 scikit-learn>=1.3
 joblib>=1.3

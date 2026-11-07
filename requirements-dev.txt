@@ -2,5 +2,7 @@
 
 # Test-only dependencies. Starlette's current TestClient uses the httpx2
 # package; keeping it here avoids adding HTTP client code to production.
+# The project and pytest 9 require Python 3.10 or newer. macOS installers use
+# Python 3.12; do not use Monterey's Command Line Tools Python 3.9.
 pytest>=9.0
 httpx2>=2.16

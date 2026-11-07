@@ -116,7 +116,9 @@ sudo apt install tesseract-ocr  # Debian/Ubuntu
 Install optional training dependencies:
 
 ```bash
-python3 -m pip install -r requirements-ml.txt
+# Run this with the same environment used by The Clicker. For an Intel macOS
+# installation, replace ./venv with ./venv-macports.
+./venv/bin/python3 -m pip install -r requirements-ml.txt
 ```
 
 Use **Mark Content** and **Mark Commercial** across multiple recordings and

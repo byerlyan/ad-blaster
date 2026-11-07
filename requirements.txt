@@ -16,7 +16,7 @@ qrcode[pil]>=7.4       # mobile LAN setup QR code (generated locally)
 
 # OpenCV: use the headless build on a server/LXC (no GUI libs needed).
 # On a desktop where you want native preview windows, swap in `opencv-python`.
-opencv-python-headless>=4.8
+opencv-python-headless>=4.8,<5
 
 # Stable capture-device enumeration by AVFoundation name on macOS.
 pyobjc-framework-AVFoundation>=9.0; platform_system == "Darwin"

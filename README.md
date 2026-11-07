@@ -304,12 +304,15 @@ See [Hybrid detection architecture](docs/hybrid-detection.md) for its safety
 semantics, configuration, API diagnostics, extension points, and current
 limitations.
 
-For a development/test environment, install `requirements-dev.txt`, which
-includes the runtime dependencies plus pytest and the FastAPI test client:
+For a development/test environment, use Python 3.10 or newer (the macOS
+installers use 3.12) and install `requirements-dev.txt`, which includes the
+runtime dependencies plus pytest and the FastAPI test client. Do not use
+Monterey's Command Line Tools Python 3.9:
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest -q
+python3.12 -m venv .venv
+./.venv/bin/python3 -m pip install -r requirements-dev.txt
+./.venv/bin/python3 -m pytest -q
 ```
 
 Optional repeatable responsive-browser QA uses installed Chrome plus Playwright WebKit:

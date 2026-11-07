@@ -6,6 +6,7 @@ SCRIPT = Path(__file__).parents[1] / "deploy" / "setup-macos.sh"
 INTEL_SCRIPT = Path(__file__).parents[1] / "deploy" / "setup-macos-intel.sh"
 REQUIREMENTS = Path(__file__).parents[1] / "requirements.txt"
 INTEL_REQUIREMENTS = Path(__file__).parents[1] / "requirements-intel-macos.txt"
+ML_REQUIREMENTS = Path(__file__).parents[1] / "requirements-ml.txt"
 
 
 def test_macos_installer_has_valid_bash_syntax():
@@ -77,3 +78,18 @@ def test_appletv_srp_dependency_is_pinned_below_breaking_release():
     requirements = REQUIREMENTS.read_text()
     assert "pyatv>=0.16,<0.19" in requirements
     assert "srptools>=1.0.1,<2" in requirements
+    assert "opencv-python-headless>=4.8,<5" in requirements
+
+
+def test_ml_requirements_are_additive_and_do_not_pull_platform_runtime_or_tests():
+    requirements = ML_REQUIREMENTS.read_text()
+    entries = [
+        line.strip().lower()
+        for line in requirements.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert "scikit-learn>=1.3" in requirements
+    assert "joblib>=1.3" in requirements
+    assert not any(line.startswith("-r ") for line in entries)
+    assert not any("pytest" in line for line in entries)
+    assert not any("opencv" in line for line in entries)
