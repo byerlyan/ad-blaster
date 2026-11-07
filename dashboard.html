@@ -683,12 +683,13 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
       <div class="section">
         <div class="section-title">Tune Thresholds</div>
         <div class="card">
-          <div style="font-size:0.78rem;color:var(--text3);margin-bottom:10px">Unlike the one-tap Home corrections, these buttons collect continuous training windows: click once to start and again to stop. Record a clean stretch of content or commercials, then click Suggest to derive thresholds from the labeled frames. Marking content on a color/combo profile also rebuilds its color reference. The first and last second of each session are auto-trimmed so you don't have to nail the click timing.</div>
+          <div style="font-size:0.78rem;color:var(--text3);margin-bottom:10px">Unlike the one-tap Home corrections, these buttons collect continuous training windows: click once to start and again to stop. Record a clean stretch of content or commercials, then click Suggest to derive thresholds from the labeled frames. Clear Suggestions only hides the calculated results; Clear Samples removes the current threshold-tuning set. Marking content on a color/combo profile also rebuilds its color reference. The first and last second of each session are auto-trimmed so you don't have to nail the click timing.</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button id="btn-mark-content" onclick="toggleMark('content')">Mark Content</button>
             <button id="btn-mark-commercial" onclick="toggleMark('commercial')">Mark Commercial</button>
             <button id="btn-suggest-thresholds" onclick="suggestThresholds()">Suggest</button>
-            <button onclick="clearSamples()">Clear</button>
+            <button id="btn-clear-suggestions" onclick="clearSuggestions()" disabled>Clear Suggestions</button>
+            <button id="btn-clear-samples" onclick="clearSamples()">Clear Samples</button>
             <span id="mark-counts" style="font-size:0.8rem;color:var(--text3);margin-left:auto"></span>
           </div>
           <div id="suggest-results" class="hidden" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"></div>
@@ -1385,7 +1386,8 @@ function renderMarkUI(s){activeMark=s.marking;
 }
 async function toggleMark(kind){try{const s=activeMark===kind?await api('POST','/api/mark/stop'):await api('POST','/api/mark/start',{kind});renderMarkUI(s);if(s.color_profile&&s.color_profile.applied)showSuccess('Color profile updated from '+s.color_profile.frames+' frames.')}catch(e){showError(e.message)}}
 async function refreshMarkCounts(){try{renderMarkUI(await api('GET','/api/mark/status'))}catch(e){}}
-async function clearSamples(){try{await api('POST','/api/mark/clear');document.getElementById('suggest-results').classList.add('hidden');await refreshMarkCounts()}catch(e){showError(e.message)}}
+function clearSuggestions(announce=true){const box=document.getElementById('suggest-results');box.replaceChildren();box.classList.add('hidden');document.getElementById('btn-clear-suggestions').disabled=true;if(announce)showSuccess('Suggestions cleared. Labeled samples were kept.')}
+async function clearSamples(){if(!confirm('Clear all current threshold-tuning samples? Exported ML samples are not deleted.'))return;try{await api('POST','/api/mark/clear');clearSuggestions(false);await refreshMarkCounts();showSuccess('Current threshold samples cleared.')}catch(e){showError(e.message)}}
 
 async function loadActivity(){try{const r=await api('GET','/api/activity?limit=100'),box=document.getElementById('activity-list');if(!r.activity.length){box.textContent='No activity yet.';return}box.innerHTML=r.activity.map(item=>{const confidence=item.evidence&&(item.evidence.fused_result?item.evidence.fused_result.confidence:item.evidence.confidence_template),reason=item.reason?' · '+esc(item.reason):'',score=Number.isFinite(Number(confidence))?' · confidence '+Number(confidence).toFixed(2):'',undone=item.undone?' · undone':'';return '<div class="activity-item"><div><strong>'+esc(item.kind.replace(/_/g,' '))+'</strong><div style="color:var(--text3);font-size:.75rem">'+reason+score+esc(undone)+'</div></div><time style="color:var(--text3);font-size:.75rem">'+new Date(item.timestamp*1000).toLocaleTimeString()+'</time></div>'}).join('')}catch(e){}}
 async function scanCaptureDevices(){try{const r=await api('GET','/api/devices/capture'),select=document.getElementById('capture-device-select');select.innerHTML='';for(const d of r.devices){const o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name;o.selected=d.id===r.selected||d.name===r.selected;select.appendChild(o)}if(!r.devices.length)select.innerHTML='<option>No capture devices found</option>'}catch(e){showError(e.message)}}
@@ -1543,12 +1545,12 @@ function renderSignalRow(name,signal,matchKey,recoveryKey,debounceKey,recoveryDe
     +'<button style="margin-left:8px;font-size:0.75rem;padding:4px 10px" onclick=\'applySignal("'+matchKey+'",'+signal.match+',"'+recoveryKey+'",'+signal.recovery+',"'+debounceKey+'",'+signal.debounce+',"'+recoveryDebounceKey+'",'+signal.recovery_debounce+')\'>Apply</button>'
     +'</div></div>';
 }
-async function suggestThresholds(){try{const r=await api('GET','/api/suggest-thresholds');if(!r.ok){showError(r.reason||'Need samples first');return}
+async function suggestThresholds(){const btn=document.getElementById('btn-suggest-thresholds'),box=document.getElementById('suggest-results');try{btn.disabled=true;btn.textContent='Suggesting…';const r=await api('GET','/api/suggest-thresholds');if(!r.ok){box.innerHTML='<div style="color:var(--accent);font-size:.8rem">'+esc(r.reason||'Collect both Content and Commercial samples first.')+'</div>';box.classList.remove('hidden');document.getElementById('btn-clear-suggestions').disabled=false;showError(r.reason||'Need samples first');return}
   const trim=r.trim_per_side||0;
   let html='<div style="font-size:0.8rem;color:var(--text3);margin-bottom:8px">Suggested from '+r.content_count+' content + '+r.commercial_count+' commercial frames across '+r.content_sessions+'+'+r.commercial_sessions+' sessions ('+trim+' frames auto-trimmed from each end of every session).</div>';
-  html+=renderSignalRow('Logo (template)',r.logo_template,'LOGO_MATCH_THRESHOLD','LOGO_RECOVERY_THRESHOLD','DEBOUNCE_FRAMES','RECOVERY_DEBOUNCE_FRAMES');
+  html+=renderSignalRow('Logo (combined edge + template)',r.logo_combined||r.logo_template,'LOGO_MATCH_THRESHOLD','LOGO_RECOVERY_THRESHOLD','DEBOUNCE_FRAMES','RECOVERY_DEBOUNCE_FRAMES');
   html+=renderSignalRow('Color',r.color,'COLOR_MATCH_THRESHOLD','COLOR_RECOVERY_THRESHOLD','COLOR_DEBOUNCE_FRAMES','COLOR_RECOVERY_DEBOUNCE_FRAMES');
-  const box=document.getElementById('suggest-results');box.innerHTML=html;box.classList.remove('hidden')}catch(e){showError(e.message)}}
+  box.innerHTML=html;box.classList.remove('hidden');document.getElementById('btn-clear-suggestions').disabled=false}catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent='Suggest'}}
 async function applySignal(matchKey,matchVal,recoveryKey,recoveryVal,debounceKey,debounceVal,recoveryDebounceKey,recoveryDebounceVal){try{const body={};body[matchKey]=matchVal;body[recoveryKey]=recoveryVal;body[debounceKey]=debounceVal;body[recoveryDebounceKey]=recoveryDebounceVal;await api('POST','/api/settings',body);showSuccess('Applied: '+matchKey.split('_')[0].toLowerCase()+' match='+matchVal+' · recovery='+recoveryVal+' · debounce='+debounceVal+' · rec.debounce='+recoveryDebounceVal);await loadSettings()}catch(e){showError(e.message)}}
 
 async function refreshFingerprints(){try{const r=await api('GET','/api/fingerprints');const box=document.getElementById('fingerprint-list');box.innerHTML=r.advertisements.length?r.advertisements.map(a=>{const id=encodeURIComponent(String(a.id)).replace(/'/g,'%27');return '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>'+esc(a.name)+' · '+Number(a.duration).toFixed(1)+'s</span><button style="padding:2px 7px" onclick="deleteFingerprint(decodeURIComponent(\''+id+'\'))">Delete</button></div>'}).join(''):'No trusted advertisements enrolled.'}catch(e){}}

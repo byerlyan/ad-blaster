@@ -182,6 +182,19 @@ def test_dashboard_clarifies_quick_corrections_and_no_logo_profiles():
     assert "Older profile — source not recorded" in html
 
 
+def test_threshold_suggestions_can_be_cleared_without_clearing_samples():
+    html = (Path(__file__).parents[1] / "dashboard.html").read_text()
+    assert 'id="btn-suggest-thresholds"' in html
+    assert 'id="btn-clear-suggestions"' in html
+    assert 'id="btn-clear-samples"' in html
+    assert "Suggestions cleared. Labeled samples were kept." in html
+    clear_suggestions = html.split("function clearSuggestions", 1)[1].split(
+        "async function clearSamples", 1
+    )[0]
+    assert "/api/mark/clear" not in clear_suggestions
+    assert "Logo (combined edge + template)" in html
+
+
 def test_full_frame_diagnostics_support_no_logo_profile_regions():
     full_frame_color = SimpleNamespace(_mode="color", _roi_rect=None, corner="color")
     custom_color = SimpleNamespace(

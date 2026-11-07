@@ -930,8 +930,12 @@ class Engine:
         """
         import numpy as np
 
-        content_samples = self._all_trimmed(self._content_sessions)
-        commercial_samples = self._all_trimmed(self._commercial_sessions)
+        # Snapshot the lists because capture runs on another thread and may
+        # append a frame while a suggestion is being calculated.
+        content_sessions = [list(session) for session in self._content_sessions]
+        commercial_sessions = [list(session) for session in self._commercial_sessions]
+        content_samples = self._all_trimmed(content_sessions)
+        commercial_samples = self._all_trimmed(commercial_sessions)
 
         if not content_samples or not commercial_samples:
             return {
@@ -940,8 +944,16 @@ class Engine:
                 **self._marking_status(),
             }
 
+        def signal_value(sample: dict, key: str) -> float:
+            # LogoDetector uses the stronger of edge and template matching.
+            # Suggestions must use that same signal or the proposed threshold
+            # will not describe the detector's real behavior.
+            if key == "logo_combined":
+                return max(float(sample.get("edge", 0.0)), float(sample.get("tmpl", 0.0)))
+            return float(sample.get(key, 0.0))
+
         def percentiles(samples: list[dict], key: str) -> dict:
-            values = np.array([s[key] for s in samples], dtype=np.float32)
+            values = np.array([signal_value(s, key) for s in samples], dtype=np.float32)
             return {
                 "min": float(values.min()),
                 "p5": float(np.percentile(values, 5)),
@@ -956,7 +968,7 @@ class Engine:
             best = 0
             current = 0
             for s in session:
-                if predicate(s[signal_key]):
+                if predicate(signal_value(s, signal_key)):
                     current += 1
                     if current > best:
                         best = current
@@ -987,10 +999,10 @@ class Engine:
                 match = (high_commercial + low_content) / 2.0
             recovery = max(match + 0.05, min(content["p25"], content["median"]))
             longest_false_dip = longest_run_across_sessions(
-                self._content_sessions, signal_key, lambda v: v < match
+                content_sessions, signal_key, lambda v: v < match
             )
             longest_false_spike = longest_run_across_sessions(
-                self._commercial_sessions, signal_key, lambda v: v >= match
+                commercial_sessions, signal_key, lambda v: v >= match
             )
             debounce = min(longest_false_dip + 1, 30)
             recovery_debounce = min(longest_false_spike + 1, 30)
@@ -1016,6 +1028,7 @@ class Engine:
             "content_sessions": len(self._content_sessions),
             "commercial_sessions": len(self._commercial_sessions),
             "trim_per_side": self._MARK_TRIM_FRAMES,
+            "logo_combined": suggest_for_signal("logo_combined"),
             "logo_template": suggest_for_signal("tmpl"),
             "logo_edge": suggest_for_signal("edge"),
             "color": suggest_for_signal("color"),

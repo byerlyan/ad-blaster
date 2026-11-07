@@ -156,6 +156,60 @@ def assert_profile_sample_countdown(page) -> None:
     assert 1 in ticks, ticks
 
 
+def assert_threshold_suggestion_controls(page) -> None:
+    cleared_samples = []
+    suggestion = {
+        "ok": True,
+        "content_count": 24,
+        "commercial_count": 24,
+        "content_sessions": 2,
+        "commercial_sessions": 2,
+        "trim_per_side": 3,
+        "logo_combined": {
+            "available": True,
+            "content": {"p5": 0.8, "median": 0.85, "p95": 0.9},
+            "commercial": {"p5": 0.1, "median": 0.15, "p95": 0.2},
+            "match": 0.5,
+            "recovery": 0.8,
+            "overlap": False,
+            "debounce": 2,
+            "debounce_uncapped": 2,
+            "recovery_debounce": 2,
+            "recovery_debounce_uncapped": 2,
+            "longest_false_dip": 1,
+            "longest_false_spike": 1,
+        },
+        "color": {"available": False},
+    }
+    page.route(
+        "**/api/suggest-thresholds",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(suggestion)
+        ),
+    )
+    page.route(
+        "**/api/mark/clear",
+        lambda route: (
+            cleared_samples.append(True),
+            route.fulfill(status=200, content_type="application/json", body='{"ok":true}'),
+        )[-1],
+    )
+    page.locator("#bottom-btn-tune").tap()
+    page.locator("#tab-tune").wait_for(state="visible")
+    page.locator("#settings-level-advanced").click()
+    page.locator("#settings-tuning-panel").wait_for(state="visible")
+    page.locator("#btn-suggest-thresholds").click()
+    page.wait_for_function(
+        "() => document.querySelector('#suggest-results').textContent.includes('combined edge + template')"
+    )
+    assert page.locator("#btn-clear-suggestions").is_enabled()
+    page.locator("#btn-clear-suggestions").click()
+    assert page.locator("#suggest-results").is_hidden()
+    assert cleared_samples == []
+    page.unroute("**/api/suggest-thresholds")
+    page.unroute("**/api/mark/clear")
+
+
 def assert_control_mode_contract(page) -> None:
     status = {
         "engine_state": "running",
@@ -460,6 +514,7 @@ def run_engine(playwright, name: str):
             if width == 390:
                 assert_control_mode_contract(page)
                 assert_profile_sample_countdown(page)
+                assert_threshold_suggestion_controls(page)
                 assert_audio_device_dropdown(page)
                 assert_wizard_capture_feedback(page)
                 assert_wizard_appletv_pairing(page)
