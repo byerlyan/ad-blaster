@@ -288,6 +288,7 @@ class Engine:
             detectors.append(
                 AdOverlayDetector(
                     tesseract_binary=config.TESSERACT_BINARY,
+                    tessdata_directory=config.TESSDATA_DIR,
                     regions=config.AD_OVERLAY_REGIONS,
                     scan_interval=config.AD_OVERLAY_SCAN_INTERVAL,
                     required_confirmations=config.AD_OVERLAY_REQUIRED_CONFIRMATIONS,

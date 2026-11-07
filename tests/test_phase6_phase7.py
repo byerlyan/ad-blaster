@@ -116,6 +116,21 @@ def test_audio_device_api_returns_dropdown_choices(monkeypatch, restore_settings
     assert response.json()["devices"][1]["name"] == "USB Digital Audio"
 
 
+def test_ml_status_endpoint_reports_artifact_load_stage(monkeypatch, tmp_path):
+    missing = tmp_path / "missing-model.joblib"
+    monkeypatch.setattr(config, "ML_MODEL_PATH", str(missing))
+
+    response = TestClient(server.app).get("/api/ml/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["loaded"] is False
+    assert payload["file_exists"] is False
+    assert payload["load_stage"] == "file_not_found"
+    assert payload["resolved_path"] == str(missing)
+    assert payload["expected_feature_count"] > 0
+
+
 def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     root = Path(__file__).parents[1]
     html = (root / "dashboard.html").read_text()
@@ -143,6 +158,10 @@ def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     assert "Processing profile..." in html
     assert "seconds remaining" in html
     assert 'id="control-mode-bar"' in html
+    assert 'id="btn-check-ml"' in html
+    assert 'id="ml-model-status"' in html
+    assert "/api/ml/status" in html
+    assert "IMPORTED AND VALIDATED" in html
     assert "SHADOW MODE · Detection and training only" in html
     assert "shadow:false" in html
     assert "shadow:localStorage" not in html

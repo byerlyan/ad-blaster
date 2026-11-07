@@ -35,6 +35,7 @@ from device_setup import (
     capture_device_diagnostics,
 )
 from engine import Engine
+from ml import MLCommercialDetector
 
 logger = logging.getLogger(__name__)
 
@@ -508,6 +509,22 @@ async def export_ml_dataset():
         media_type="text/csv",
         filename="the-clicker-features.csv",
     )
+
+
+@app.get("/api/ml/status")
+async def inspect_ml_model():
+    """Load and validate the configured artifact without starting the engine."""
+    detector = await asyncio.to_thread(
+        MLCommercialDetector,
+        config.ML_MODEL_PATH,
+        commercial_threshold=config.ML_COMMERCIAL_THRESHOLD,
+        program_threshold=config.ML_PROGRAM_THRESHOLD,
+        inference_interval=config.ML_INFERENCE_INTERVAL,
+    )
+    return {
+        **asdict(detector.status()),
+        "classifier_enabled": config.ML_CLASSIFIER_ENABLED,
+    }
 
 
 @app.post("/api/toggle")

@@ -38,10 +38,13 @@ def test_macos_installer_uses_user_launch_agent_and_preserves_runtime_state():
     assert "dashboard.html help.html" in script
     assert "dashboard_auth.py" not in script
     assert 'ffmpeg tesseract' in script
+    assert "tesseract-eng" in script
     assert "audio.py ad_overlay.py" in script
     assert "ml.py ml_artifacts.py" in script
     assert "scripts/train_commercial_model.py --dataset data/features.csv" in script
     assert '"TESSERACT_BINARY": tesseract_bin' in script
+    assert '"TESSDATA_DIR": tessdata_dir' in script
+    assert "eng.traineddata" in script
 
 
 def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
@@ -58,6 +61,7 @@ def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
     assert "CLICKER_MACPORTS_PREFIX" in result.stdout
     assert '"$(uname -m)" != "x86_64"' in wrapper
     assert 'CLICKER_PACKAGE_MANAGER="macports"' in wrapper
+    assert 'CLICKER_TESSERACT_LANGUAGE_PORT="tesseract-eng"' in wrapper
     for package in (
         "python312",
         "py312-pip",
@@ -66,6 +70,7 @@ def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
         "py312-pyobjc",
         "ffmpeg",
         "tesseract",
+        "tesseract-eng",
     ):
         assert package in common
     assert "--system-site-packages" in common

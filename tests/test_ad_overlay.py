@@ -1,8 +1,9 @@
 import subprocess
+from types import SimpleNamespace
 
 import numpy as np
 
-from ad_overlay import AdOverlayDetector, OCRObservation
+from ad_overlay import AdOverlayDetector, OCRObservation, TesseractOCR
 from detection_pipeline import (
     Classification,
     DetectionInput,
@@ -49,6 +50,33 @@ def test_missing_tesseract_is_unavailable_not_commercial():
     assert not actual.available
     assert actual.classification == Classification.UNKNOWN
     assert actual.diagnostics["reason"] == "tesseract_unavailable"
+
+
+def test_tesseract_uses_explicit_discovered_language_directory(tmp_path, monkeypatch):
+    tessdata = tmp_path / "share" / "tessdata"
+    tessdata.mkdir(parents=True)
+    (tessdata / "eng.traineddata").write_bytes(b"test fixture")
+    captured = {}
+
+    monkeypatch.setattr("ad_overlay.shutil.which", lambda _binary: "/usr/bin/tesseract")
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["environment"] = kwargs["env"]
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr("ad_overlay.subprocess.run", fake_run)
+    runner = TesseractOCR(
+        "tesseract",
+        tessdata_directory=str(tmp_path),
+    )
+
+    runner(np.full((20, 40, 3), 255, dtype=np.uint8))
+
+    assert runner.tessdata_directory == str(tessdata)
+    index = captured["command"].index("--tessdata-dir")
+    assert captured["command"][index + 1] == str(tessdata)
+    assert captured["environment"]["TESSDATA_PREFIX"] == str(tessdata)
 
 
 def test_tesseract_timeout_is_reported_without_crashing_pipeline():

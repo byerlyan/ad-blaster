@@ -54,4 +54,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export CLICKER_PACKAGE_MANAGER="macports"
+# MacPorts ships OCR languages separately from the tesseract executable. Keep
+# this requirement explicit in the Intel entry point even though installation
+# is performed by the shared macOS implementation below.
+export CLICKER_TESSERACT_LANGUAGE_PORT="tesseract-eng"
 exec /bin/bash "$SCRIPT_DIR/setup-macos.sh" "$@"

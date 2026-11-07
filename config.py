@@ -97,6 +97,12 @@ HYBRID_MIN_COMMERCIAL_SOURCES = 2
 # diagnostically but ignored because sports/game clocks are common.
 AD_OVERLAY_ENABLED = _env_bool("AD_OVERLAY_ENABLED", True)
 TESSERACT_BINARY = os.environ.get("TESSERACT_BINARY", "tesseract")
+# Optional explicit directory containing eng.traineddata. The OCR adapter also
+# discovers standard Homebrew and MacPorts locations, but LaunchAgents should
+# pass this so Tesseract never depends on an interactive shell environment.
+TESSDATA_DIR = os.environ.get(
+    "TESSDATA_DIR", os.environ.get("TESSDATA_PREFIX", "")
+).strip()
 AD_OVERLAY_SCAN_INTERVAL = 1.0
 AD_OVERLAY_REQUIRED_CONFIRMATIONS = 2
 AD_OVERLAY_HOLD_SECONDS = 2.0

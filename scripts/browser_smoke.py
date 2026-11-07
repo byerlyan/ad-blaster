@@ -127,6 +127,8 @@ def assert_audio_device_dropdown(page) -> None:
             status=200, content_type="application/json", body=json.dumps(response)
         ),
     )
+    page.locator("#bottom-btn-tune").tap()
+    page.locator("#tab-tune").wait_for(state="visible")
     page.evaluate(
         "() => { audioDevicesLoaded=false; settingsSnapshot.AUDIO_DEVICE_NAME=''; document.querySelector('#set-audio-device').value=''; setSettingsLevel('advanced'); }"
     )
@@ -208,6 +210,56 @@ def assert_threshold_suggestion_controls(page) -> None:
     assert cleared_samples == []
     page.unroute("**/api/suggest-thresholds")
     page.unroute("**/api/mark/clear")
+
+
+def assert_ml_model_inspection(page) -> None:
+    response = {
+        "loaded": True,
+        "path": "data/commercial_model.joblib",
+        "resolved_path": "/tmp/the-clicker/data/commercial_model.joblib",
+        "version": "linear-platt-test",
+        "error": None,
+        "metadata": {
+            "sample_count": 240,
+            "group_count": 8,
+            "commercial_precision": 0.91,
+            "commercial_recall": 0.89,
+        },
+        "file_exists": True,
+        "file_size_bytes": 16384,
+        "modified_at": 1700000000,
+        "load_stage": "loaded",
+        "schema_valid": True,
+        "artifact_feature_count": 26,
+        "expected_feature_count": 26,
+        "model_class": "ml_artifacts.PlattCalibratedModel",
+        "loaded_at": 1700000001,
+        "last_inference_at": None,
+        "last_probability": None,
+        "last_inference_ms": None,
+        "dependencies": {
+            "python": "3.12.0",
+            "numpy": "2.0.0",
+            "joblib": "1.4.0",
+            "scikit-learn": "1.5.0",
+        },
+        "classifier_enabled": True,
+    }
+    page.route(
+        "**/api/ml/status",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(response)
+        ),
+    )
+    page.evaluate("() => showTab('watch')")
+    page.locator("#btn-check-ml").click()
+    page.wait_for_function(
+        "() => document.querySelector('#ml-model-status').textContent.includes('IMPORTED AND VALIDATED')"
+    )
+    details = page.locator("#ml-model-status").inner_text()
+    assert "26 artifact features / 26 expected" in details
+    assert "No successful inference recorded yet" in details
+    page.unroute("**/api/ml/status")
 
 
 def assert_control_mode_contract(page) -> None:
@@ -515,6 +567,7 @@ def run_engine(playwright, name: str):
                 assert_control_mode_contract(page)
                 assert_profile_sample_countdown(page)
                 assert_threshold_suggestion_controls(page)
+                assert_ml_model_inspection(page)
                 assert_audio_device_dropdown(page)
                 assert_wizard_capture_feedback(page)
                 assert_wizard_appletv_pairing(page)

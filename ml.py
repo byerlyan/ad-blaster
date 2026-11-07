@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import queue
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version as package_version
+from pathlib import Path
 from typing import Any, Mapping
 
 import cv2
@@ -130,6 +133,20 @@ class ModelStatus:
     version: str | None = None
     error: str | None = None
     metadata: Mapping[str, Any] | None = None
+    resolved_path: str = ""
+    file_exists: bool = False
+    file_size_bytes: int | None = None
+    modified_at: float | None = None
+    load_stage: str = "not_checked"
+    schema_valid: bool | None = None
+    artifact_feature_count: int | None = None
+    expected_feature_count: int = len(FEATURE_NAMES)
+    model_class: str | None = None
+    loaded_at: float | None = None
+    last_inference_at: float | None = None
+    last_probability: float | None = None
+    last_inference_ms: float | None = None
+    dependencies: Mapping[str, str | None] | None = None
 
 
 class MLCommercialDetector:
@@ -154,35 +171,105 @@ class MLCommercialDetector:
         self._feature_names = tuple(FEATURE_NAMES)
         self._metadata: dict[str, Any] = {}
         self._error: str | None = None
+        self._load_stage = "not_checked"
+        self._schema_valid: bool | None = None
+        self._artifact_feature_count: int | None = None
+        self._model_class: str | None = None
+        self._loaded_at: float | None = None
         self._last_evaluation_timestamp = float("-inf")
         self._last_probability: float | None = None
+        self._last_inference_at: float | None = None
+        self._last_inference_ms: float | None = None
         self._last_vector: dict[str, float] | None = None
         self._load()
 
     def _load(self) -> None:
         if not self.model_path or not os.path.exists(self.model_path):
             self._error = "model file not found"
+            self._load_stage = "file_not_found"
             return
         try:
             import joblib
+        except Exception as exc:
+            self._error = f"{type(exc).__name__}: {exc}"
+            self._load_stage = "dependency_error"
+            return
 
+        try:
             artifact = joblib.load(self.model_path)
-            self._model = artifact["model"]
-            self._feature_names = tuple(artifact["feature_names"])
+        except Exception as exc:
+            self._error = f"{type(exc).__name__}: {exc}"
+            self._load_stage = "artifact_read_error"
+            return
+
+        try:
+            if not isinstance(artifact, Mapping):
+                raise ValueError("model artifact must be a mapping")
+            if "model" not in artifact or "feature_names" not in artifact:
+                raise ValueError("model artifact is missing model or feature_names")
+            candidate_model = artifact["model"]
+            if not callable(getattr(candidate_model, "predict_proba", None)):
+                raise ValueError("model artifact does not provide predict_proba")
+            self._feature_names = tuple(str(name) for name in artifact["feature_names"])
+            self._artifact_feature_count = len(self._feature_names)
             self._metadata = dict(artifact.get("metadata", {}))
             if tuple(self._feature_names) != tuple(FEATURE_NAMES):
                 raise ValueError("model feature schema does not match this application version")
+            self._schema_valid = True
+            self._model = candidate_model
+            model_type = type(candidate_model)
+            self._model_class = f"{model_type.__module__}.{model_type.__qualname__}"
+            self._loaded_at = time.time()
+            self._load_stage = "loaded"
+            self._error = None
         except Exception as exc:
             self._model = None
+            self._schema_valid = False
+            self._load_stage = "artifact_validation_error"
             self._error = f"{type(exc).__name__}: {exc}"
 
+    @staticmethod
+    def _dependency_versions() -> dict[str, str | None]:
+        versions: dict[str, str | None] = {"python": platform.python_version()}
+        for distribution in ("numpy", "joblib", "scikit-learn"):
+            try:
+                versions[distribution] = package_version(distribution)
+            except PackageNotFoundError:
+                versions[distribution] = None
+        return versions
+
     def status(self) -> ModelStatus:
+        resolved = str(Path(self.model_path).expanduser().resolve(strict=False)) if self.model_path else ""
+        file_size = None
+        modified_at = None
+        exists = False
+        if resolved:
+            try:
+                stat = Path(resolved).stat()
+                exists = True
+                file_size = stat.st_size
+                modified_at = stat.st_mtime
+            except OSError:
+                pass
         return ModelStatus(
             loaded=self._model is not None,
             path=self.model_path,
             version=self._metadata.get("model_version"),
             error=self._error,
             metadata=self._metadata,
+            resolved_path=resolved,
+            file_exists=exists,
+            file_size_bytes=file_size,
+            modified_at=modified_at,
+            load_stage=self._load_stage,
+            schema_valid=self._schema_valid,
+            artifact_feature_count=self._artifact_feature_count,
+            model_class=self._model_class,
+            loaded_at=self._loaded_at,
+            last_inference_at=self._last_inference_at,
+            last_probability=self._last_probability,
+            last_inference_ms=self._last_inference_ms,
+            dependencies=self._dependency_versions(),
         )
 
     def evaluate(self, sample: DetectionInput) -> DetectorResult:
@@ -248,6 +335,8 @@ class MLCommercialDetector:
         probability = float(self._model.predict_proba(ordered)[0][1])
         self._last_probability = probability
         inference_ms = (time.perf_counter() - started) * 1000.0
+        self._last_inference_at = sample.timestamp
+        self._last_inference_ms = inference_ms
         if probability >= self.commercial_threshold:
             classification = Classification.COMMERCIAL
         elif probability <= self.program_threshold:

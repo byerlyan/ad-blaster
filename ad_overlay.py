@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import re
 import shutil
 import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -93,9 +95,52 @@ def _countdown_seconds(text: str) -> int | None:
 class TesseractOCR:
     """Small subprocess adapter that keeps OCR an optional system feature."""
 
-    def __init__(self, binary: str = "tesseract", timeout_seconds: float = 2.0):
+    def __init__(
+        self,
+        binary: str = "tesseract",
+        timeout_seconds: float = 2.0,
+        tessdata_directory: str = "",
+    ):
         self.binary = shutil.which(binary) or ""
         self.timeout_seconds = max(0.1, float(timeout_seconds))
+        self.tessdata_directory = self._resolve_tessdata_directory(tessdata_directory)
+
+    def _resolve_tessdata_directory(self, configured: str) -> str:
+        """Find a directory containing English data across macOS package layouts."""
+        candidates: list[Path] = []
+        for value in (
+            configured,
+            os.environ.get("TESSDATA_DIR", ""),
+            os.environ.get("TESSDATA_PREFIX", ""),
+        ):
+            if value:
+                base = Path(value).expanduser()
+                candidates.extend((base, base / "tessdata", base / "share" / "tessdata"))
+        if self.binary:
+            executable = Path(self.binary)
+            candidates.append(executable.parent.parent / "share" / "tessdata")
+            try:
+                resolved = executable.resolve()
+                candidates.append(resolved.parent.parent / "share" / "tessdata")
+            except OSError:
+                pass
+        candidates.extend(
+            Path(path)
+            for path in (
+                "/opt/homebrew/share/tessdata",
+                "/usr/local/share/tessdata",
+                "/opt/local/share/tessdata",
+            )
+        )
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = str(candidate)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            if (candidate / "eng.traineddata").is_file():
+                return normalized
+        return ""
 
     @property
     def available(self) -> bool:
@@ -124,21 +169,19 @@ class TesseractOCR:
         encoded, png = cv2.imencode(".png", gray)
         if not encoded:
             raise RuntimeError("could not encode OCR region")
+        command = [self.binary, "stdin", "stdout"]
+        environment = os.environ.copy()
+        if self.tessdata_directory:
+            command.extend(["--tessdata-dir", self.tessdata_directory])
+            environment["TESSDATA_PREFIX"] = self.tessdata_directory
+        command.extend(["--psm", "6", "-l", "eng", "tsv"])
         completed = subprocess.run(
-            [
-                self.binary,
-                "stdin",
-                "stdout",
-                "--psm",
-                "6",
-                "-l",
-                "eng",
-                "tsv",
-            ],
+            command,
             input=png.tobytes(),
             capture_output=True,
             timeout=self.timeout_seconds,
             check=False,
+            env=environment,
         )
         if completed.returncode != 0:
             error = completed.stderr.decode("utf-8", errors="replace").strip()
@@ -174,6 +217,7 @@ class AdOverlayDetector:
         *,
         ocr_runner: OCRRunner | None = None,
         tesseract_binary: str = "tesseract",
+        tessdata_directory: str = "",
         regions: Sequence[tuple[float, float, float, float]] = (
             (0.0, 0.0, 1.0, 0.32),
             (0.0, 0.62, 1.0, 0.38),
@@ -184,7 +228,11 @@ class AdOverlayDetector:
         minimum_ocr_confidence: float = 0.35,
         timeout_seconds: float = 2.0,
     ):
-        default_ocr = TesseractOCR(tesseract_binary, timeout_seconds)
+        default_ocr = TesseractOCR(
+            tesseract_binary,
+            timeout_seconds,
+            tessdata_directory,
+        )
         self._ocr = ocr_runner or default_ocr
         self._available = (
             default_ocr.available if ocr_runner is None else True

@@ -9,7 +9,7 @@ from detection_pipeline import (
 )
 from detector import DetectionState
 from engine import Engine
-from ml import ModelStatus
+from ml import FEATURE_NAMES, ModelStatus
 
 
 class StaticResultDetector:
@@ -124,13 +124,11 @@ def test_hybrid_status_serializes_ml_detector_status():
 
     status = engine.get_status()
 
-    assert status.ml == {
-        "loaded": False,
-        "path": "commercial-model.joblib",
-        "version": None,
-        "error": "model file not found",
-        "metadata": None,
-    }
+    assert status.ml["loaded"] is False
+    assert status.ml["path"] == "commercial-model.joblib"
+    assert status.ml["error"] == "model file not found"
+    assert status.ml["load_stage"] == "not_checked"
+    assert status.ml["expected_feature_count"] == len(FEATURE_NAMES)
 
 
 def test_disabled_hybrid_visual_is_measured_but_has_zero_fusion_weight(monkeypatch):

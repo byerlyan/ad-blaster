@@ -256,6 +256,7 @@ The Diagnostics QR opens the LAN URL. Use Safari or Chrome's **Add to Home Scree
 |---|---|
 | **Profile preview shows the FaceTime camera** | The preview is a saved calibration frame, not a live feed. Select the HDMI card in the wizard or Settings, then overwrite/recreate that profile. Calibration now resolves the saved macOS device name and refuses unsafe numeric fallback. |
 | **Intel macOS reports no video inputs** | Pull the latest code and rerun `bash deploy/setup-macos-intel.sh`. On Monterey, allow The Clicker's MacPorts Python process under **System Preferences → Security & Privacy → Privacy → Camera**, then restart the LaunchAgent. Monterey uses the older external-camera API, which this path handles automatically. |
+| **OCR cannot open tessdata / `eng.traineddata`** | Rerun the matching macOS installer. It now validates the language-data directory and writes it into the LaunchAgent. On Intel MacPorts, English data is a separate package: `sudo port install tesseract-eng`. |
 | **Capture is black / blank** | HDCP on the HDMI feed, or capture card not seated in a USB 3.0 port. |
 | **"Permission denied" / `/dev/video0` won't open** | Pi / bare metal: run the service as root (the installer's default) or add your user to the `video` group. Proxmox LXC: apply the host udev rule. |
 | **No `/dev/video*` at all** | Capture card not in a USB 3.0 port (or, in a Proxmox LXC, passthrough not configured). Check `lsusb` / `v4l2-ctl --list-devices`. |

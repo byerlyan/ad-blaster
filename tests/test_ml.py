@@ -115,6 +115,11 @@ def test_missing_and_corrupt_models_fall_back_to_unknown(tmp_path):
     assert not missing_result.available
     assert corrupt_result.classification == Classification.UNKNOWN
     assert not corrupt_result.available
+    assert missing.status().load_stage == "file_not_found"
+    assert missing.status().file_exists is False
+    assert corrupt.status().load_stage == "artifact_read_error"
+    assert corrupt.status().file_exists is True
+    assert corrupt.status().file_size_bytes > 0
 
 
 def test_feature_collection_works_without_a_model(tmp_path):
@@ -199,3 +204,21 @@ def test_training_uses_disjoint_groups_and_serializes_metadata(tmp_path):
     assert metadata["commercial_recall"] >= 0.9
     assert detector.status().loaded
     assert detector.status().version == metadata["model_version"]
+    assert detector.status().load_stage == "loaded"
+    assert detector.status().schema_valid is True
+    assert detector.status().artifact_feature_count == len(FEATURE_NAMES)
+    assert detector.status().expected_feature_count == len(FEATURE_NAMES)
+    assert detector.status().model_class == "ml_artifacts.PlattCalibratedModel"
+    assert detector.status().dependencies["scikit-learn"]
+
+    frame = np.full((32, 32, 3), 100, dtype=np.uint8)
+    detector.evaluate(
+        DetectionInput(
+            timestamp=100.0,
+            frame=frame,
+            features={"ml_inference_enabled": True, "visual": {}},
+        )
+    )
+    assert detector.status().last_inference_at == 100.0
+    assert detector.status().last_probability is not None
+    assert detector.status().last_inference_ms is not None

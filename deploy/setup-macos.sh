@@ -74,6 +74,7 @@ RUNTIME_PREFIX=""
 REQUIREMENTS_NAME="requirements.txt"
 VENV_NAME="venv"
 VENV_SYSTEM_SITE="false"
+TESSERACT_LANGUAGE_PORT="${CLICKER_TESSERACT_LANGUAGE_PORT:-tesseract-eng}"
 
 if [ "$PACKAGE_MANAGER" = "macports" ]; then
     if [ "$(uname -m)" != "x86_64" ]; then
@@ -94,7 +95,7 @@ if [ "$PACKAGE_MANAGER" = "macports" ]; then
     echo "[1/6] Installing MacPorts Intel runtime packages..."
     /usr/bin/sudo "$PORT_BIN" install \
         python312 py312-pip py312-virtualenv py312-opencv4 py312-pyobjc \
-        ffmpeg tesseract
+        ffmpeg tesseract "$TESSERACT_LANGUAGE_PORT"
     PYTHON_BIN="$RUNTIME_PREFIX/bin/python3.12"
     REQUIREMENTS_NAME="requirements-intel-macos.txt"
     VENV_NAME="venv-macports"
@@ -160,6 +161,21 @@ fi
 if [ ! -x "$TESSERACT_BIN" ]; then
     echo "Could not find $RUNTIME_NAME Tesseract at $TESSERACT_BIN." >&2
     exit 1
+fi
+TESSDATA_DIR="$RUNTIME_PREFIX/share/tessdata"
+if [ ! -f "$TESSDATA_DIR/eng.traineddata" ]; then
+    TESSDATA_FILE="$(find "$RUNTIME_PREFIX/share" -type f -name eng.traineddata -print -quit 2>/dev/null || true)"
+    if [ -n "$TESSDATA_FILE" ]; then
+        TESSDATA_DIR="$(dirname "$TESSDATA_FILE")"
+    else
+        echo "Could not find English Tesseract data (eng.traineddata) under $RUNTIME_PREFIX/share." >&2
+        if [ "$PACKAGE_MANAGER" = "macports" ]; then
+            echo "Install it with: sudo $PORT_BIN install tesseract-eng" >&2
+        else
+            echo "Reinstall the Homebrew tesseract formula and rerun this installer." >&2
+        fi
+        exit 1
+    fi
 fi
 
 echo "[2/6] Creating the application directory..."
@@ -235,7 +251,7 @@ fi
 echo "[5/6] Writing the LaunchAgent..."
 "$VENV_DIR/bin/python3" - "$PLIST_PATH" "$AGENT_LABEL" "$INSTALL_DIR" \
     "$VENV_DIR/bin/python3" "$LOG_DIR" "$BIND_HOST" "$CLICKER_PORT_VALUE" \
-    "$FFMPEG_BIN" "$TESSERACT_BIN" "$RUNTIME_PREFIX" <<'PY'
+    "$FFMPEG_BIN" "$TESSERACT_BIN" "$TESSDATA_DIR" "$RUNTIME_PREFIX" <<'PY'
 import plistlib
 import sys
 
@@ -249,6 +265,7 @@ import sys
     port,
     ffmpeg_bin,
     tesseract_bin,
+    tessdata_dir,
     runtime_prefix,
 ) = sys.argv[1:]
 
@@ -266,6 +283,8 @@ payload = {
         "CLICKER_PORT": port,
         "FFMPEG_BINARY": ffmpeg_bin,
         "TESSERACT_BINARY": tesseract_bin,
+        "TESSDATA_DIR": tessdata_dir,
+        "TESSDATA_PREFIX": tessdata_dir,
         "PATH": f"{runtime_prefix}/bin:{runtime_prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
     },
     "StandardOutPath": f"{log_dir}/clicker.log",

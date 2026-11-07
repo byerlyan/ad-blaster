@@ -632,9 +632,11 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
             <input class="input-sm" id="fingerprint-seconds" type="number" min="3" max="120" value="10" style="width:64px">
             <button onclick="enrollFingerprint()">Enroll recent audio</button>
             <a href="/api/ml/dataset/export" style="color:var(--green);font-size:0.78rem">Export training CSV</a>
+            <button id="btn-check-ml" onclick="checkMLModel()">Check ML model</button>
           </div>
           <div style="font-size:0.7rem;color:var(--text3);margin-top:7px">Enrollment is explicit; suspected commercials are never trusted automatically.</div>
           <div id="fingerprint-list" style="margin-top:10px;font-size:0.76rem;color:var(--text3)"></div>
+          <div id="ml-model-status" role="status" aria-live="polite" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:.74rem;color:var(--text3)">ML artifact has not been checked in this dashboard session.</div>
         </div>
       </div>
 
@@ -1164,6 +1166,24 @@ async function deleteProfile(){
 
 function confColor(v,t){return v>=t?'var(--green)':'var(--red)'}
 function esc(v){return String(v===undefined||v===null?'--':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function formatFileSize(bytes){if(bytes===undefined||bytes===null)return '--';if(bytes<1024)return bytes+' B';if(bytes<1048576)return(bytes/1024).toFixed(1)+' KiB';return(bytes/1048576).toFixed(1)+' MiB'}
+function formatStatusTime(seconds){return seconds?new Date(seconds*1000).toLocaleString():'--'}
+function mlModelStatusHtml(m){
+  const imported=!!(m&&m.loaded&&m.load_stage==='loaded'&&m.schema_valid===true),state=imported?'IMPORTED AND VALIDATED':'NOT IMPORTED',color=imported?'var(--green)':'var(--red)';
+  const deps=m&&m.dependencies||{},meta=m&&m.metadata||{},schema=(m&&m.schema_valid===true?'valid':m&&m.schema_valid===false?'rejected':'not checked');
+  const inference=m&&m.last_inference_at?'P(commercial) '+Number(m.last_probability).toFixed(3)+' · '+Number(m.last_inference_ms||0).toFixed(1)+' ms · '+formatStatusTime(m.last_inference_at):'No successful inference recorded yet.';
+  const metrics=meta.sample_count!==undefined?' · trained with '+esc(meta.sample_count)+' samples / '+esc(meta.group_count)+' groups · precision '+Number(meta.commercial_precision||0).toFixed(3)+' · recall '+Number(meta.commercial_recall||0).toFixed(3):'';
+  return '<div style="color:'+color+';font-weight:700;margin-bottom:6px">'+state+'</div>'
+    +'<div><strong>Load stage:</strong> '+esc(m&&m.load_stage||'not checked')+(m&&m.error?' · <span style="color:var(--red)">'+esc(m.error)+'</span>':'')+'</div>'
+    +'<div><strong>Artifact:</strong> <code style="white-space:normal">'+esc(m&&m.resolved_path||m&&m.path||'not configured')+'</code></div>'
+    +'<div><strong>File:</strong> '+(m&&m.file_exists?'present · '+formatFileSize(m.file_size_bytes)+' · modified '+formatStatusTime(m.modified_at):'missing')+'</div>'
+    +'<div><strong>Schema:</strong> '+schema+' · '+esc(m&&m.artifact_feature_count)+' artifact features / '+esc(m&&m.expected_feature_count)+' expected</div>'
+    +'<div><strong>Model:</strong> '+esc(m&&m.model_class||'--')+' · version '+esc(m&&m.version||'--')+metrics+'</div>'
+    +'<div><strong>Runtime:</strong> Python '+esc(deps.python)+' · NumPy '+esc(deps.numpy)+' · joblib '+esc(deps.joblib)+' · scikit-learn '+esc(deps['scikit-learn'])+'</div>'
+    +'<div><strong>Classifier setting:</strong> '+(m&&m.classifier_enabled===false?'disabled':'enabled or engine-managed')+' · <strong>Last inference:</strong> '+inference+'</div>';
+}
+function renderMLModelStatus(m){const box=document.getElementById('ml-model-status');if(box)box.innerHTML=mlModelStatusHtml(m)}
+async function checkMLModel(){const btn=document.getElementById('btn-check-ml');try{btn.disabled=true;btn.textContent='Checking…';const status=await api('GET','/api/ml/status');renderMLModelStatus(status);if(status.loaded&&status.schema_valid)showSuccess('ML model imported and schema validated.');else showError(status.error||'ML model was not imported.')}catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent='Check ML model'}}
 function renderDetectorDiagnostics(s){
   const rows=(s.detector_results||[]).map(r=>{
     const d=r.diagnostics||{};
@@ -1174,10 +1194,12 @@ function renderDetectorDiagnostics(s){
   const fused=s.fused_result?'<div style="padding:7px 0;color:var(--green)"><strong>Fused</strong> · '+esc(s.fused_result.classification)+' · '+Number(s.fused_result.confidence||0).toFixed(3)+'</div>':'<div style="padding:7px 0">Fused: legacy mode</div>';
   const legacy=(s.detector_results||[]).find(r=>r.detector_name==='legacy_visual');
   const compare=s.shadow_mode&&legacy?'<div style="padding:5px 0"><strong>Shadow comparison</strong> · legacy '+esc(legacy.classification)+' / hybrid '+esc(s.fused_result?s.fused_result.classification:'not active')+'</div>':'';
-  const audio='<div style="padding:5px 0">Audio: '+esc(s.audio&&s.audio.available?'available':(s.audio&&s.audio.error)||'unavailable')+' · Fingerprint: '+esc(s.fingerprint&&s.fingerprint.latest&&s.fingerprint.latest.matched?'matched':(s.fingerprint&&s.fingerprint.available?'no match':'unavailable'))+' · ML: '+esc(s.ml&&s.ml.loaded?('loaded '+(s.ml.version||'')):(s.ml&&s.ml.error)||'unavailable')+'</div>';
+  const mlSummary=s.ml&&s.ml.loaded&&s.ml.schema_valid===true?'imported + schema valid'+(s.ml.version?' · '+s.ml.version:''):(s.ml&&s.ml.load_stage?('not imported · '+s.ml.load_stage):((s.ml&&s.ml.error)||'unavailable'));
+  const audio='<div style="padding:5px 0">Audio: '+esc(s.audio&&s.audio.available?'available':(s.audio&&s.audio.error)||'unavailable')+' · Fingerprint: '+esc(s.fingerprint&&s.fingerprint.latest&&s.fingerprint.latest.matched?'matched':(s.fingerprint&&s.fingerprint.available?'no match':'unavailable'))+' · ML: '+esc(mlSummary)+'</div>';
   const events=(s.recent_events||[]).slice(-5).reverse().map(e=>'<div>'+new Date(e.t*1000).toLocaleTimeString()+' · '+esc(e.type)+(e.reason?' · '+esc(e.reason):'')+'</div>').join('');
   const html=rows+fused+compare+audio+(events?'<div style="margin-top:7px"><strong style="color:var(--text2)">Recent actions</strong>'+events+'</div>':'');
   for(const id of ['detector-diagnostics','detector-diagnostics-page']){const box=document.getElementById(id);if(box)box.innerHTML=html}
+  if(s.ml&&s.ml.load_stage)renderMLModelStatus(s.ml);
 }
 
 let pollInFlight=false,engineRunning=false;
