@@ -169,7 +169,7 @@ mkdir -p "$INSTALL_DIR/scripts" "$INSTALL_DIR/docs" "$LAUNCH_AGENTS_DIR" "$LOG_D
 echo "[3/6] Copying application files (runtime data is preserved)..."
 APP_FILES=(
     server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py
-    fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py
+    fingerprint.py ml.py ml_artifacts.py evaluation.py calibrate.py config.py intervention.py
     pair.py corrections.py device_setup.py dashboard.html help.html
     manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png
     requirements.txt requirements-intel-macos.txt requirements-dev.txt

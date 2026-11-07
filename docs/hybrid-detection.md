@@ -116,9 +116,11 @@ sudo apt install tesseract-ocr  # Debian/Ubuntu
 Install optional training dependencies:
 
 ```bash
-# Run this with the same environment used by The Clicker. For an Intel macOS
-# installation, replace ./venv with ./venv-macports.
-./venv/bin/python3 -m pip install -r requirements-ml.txt
+# Source checkout (such as this repository)
+./.venv/bin/python3 -m pip install -r requirements-ml.txt
+
+# Installed app: use ./venv/bin/python3 on Apple silicon/Linux, or
+# ./venv-macports/bin/python3 on an Intel MacPorts installation.
 ```
 
 Use **Mark Content** and **Mark Commercial** across multiple recordings and
@@ -129,11 +131,15 @@ and bounded temporal history.
 Export and train:
 
 ```bash
-python3 scripts/export_feature_dataset.py --output data/features.csv
-python3 scripts/train_commercial_model.py \
+./.venv/bin/python3 scripts/export_feature_dataset.py --output data/features.csv
+./.venv/bin/python3 scripts/train_commercial_model.py \
   --dataset data/features.csv \
   --output data/commercial_model.joblib
 ```
+
+Use the corresponding `venv` or `venv-macports` executable when running from
+an installed copy. Do not mix the virtual environment with macOS Command Line
+Tools Python; `python3` in the shell may refer to a different installation.
 
 Training uses standardized logistic regression with Platt calibration, suitable
 for an older Intel CPU. Fit, calibration, and test partitions are separated by

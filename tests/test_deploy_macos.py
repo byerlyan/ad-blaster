@@ -39,6 +39,7 @@ def test_macos_installer_uses_user_launch_agent_and_preserves_runtime_state():
     assert "dashboard_auth.py" not in script
     assert 'ffmpeg tesseract' in script
     assert "audio.py ad_overlay.py" in script
+    assert "ml.py ml_artifacts.py" in script
     assert '"TESSERACT_BINARY": tesseract_bin' in script
 
 

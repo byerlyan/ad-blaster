@@ -60,7 +60,7 @@ pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
 # Copy project files (skip if already in the install directory)
 echo "[4/5] Setting up project files..."
 if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
-    for f in server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py pair.py corrections.py device_setup.py dashboard.html help.html manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png requirements.txt requirements-dev.txt requirements-ml.txt requirements-browser.txt; do
+    for f in server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py fingerprint.py ml.py ml_artifacts.py evaluation.py calibrate.py config.py intervention.py pair.py corrections.py device_setup.py dashboard.html help.html manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png requirements.txt requirements-dev.txt requirements-ml.txt requirements-browser.txt; do
         if [ -f "$SCRIPT_DIR/$f" ]; then
             cp "$SCRIPT_DIR/$f" "$INSTALL_DIR/"
         fi

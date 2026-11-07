@@ -205,7 +205,7 @@ Theoretically you should only need to do this once per channel, but I've gotten 
   - **Calibration**: profile diagnostics, capture check, touch ROI selection, resize handles, pinch zoom, and numeric coordinates.
   - **Settings**: Basic by default (mode, sensitivity, independent mute/skip controls, shadow preference, profile/devices); Advanced exposes detector, subsystem, fusion, intervention, and safety controls.
   - **Diagnostics**: detector health and the direct-access private-LAN address/QR.
-- **Start** picks up the selected channel's profile and begins. **Shadow** mode detects without touching the TV (great for testing).
+- **Start Active Control** connects to the Apple TV and permits configured mute/skip actions. **Start Shadow Mode** runs detection and training with Apple TV control disconnected; automatic and manual volume/skip commands are blocked.
 - Muting and skipping are independent. With **Mute detected commercials** on and **Skip commercials** off, every detected break is mute-only—even during delayed playback.
 - Skipping is opt-in and is attempted only when pyatv reports delayed/DVR playback. Live playback is never skipped. If both controls are enabled, delayed breaks mute immediately while the skip loop runs, then restore the previous volume.
 - On the first visit, a six-step wizard walks through capture, Apple TV pairing, detection mode, calibration, shadow validation, and enabling automatic control.

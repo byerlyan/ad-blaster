@@ -15,16 +15,23 @@ import sys
 import time
 from pathlib import Path
 
-import joblib
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, recall_score
-from sklearn.model_selection import GroupShuffleSplit
-from sklearn.preprocessing import StandardScaler
+try:
+    import joblib
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import precision_score, recall_score
+    from sklearn.model_selection import GroupShuffleSplit
+    from sklearn.preprocessing import StandardScaler
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        f"Missing training dependency {exc.name!r}. Run this script with The Clicker's "
+        "virtual-environment Python after installing requirements-ml.txt; for a source "
+        "checkout, use: ./.venv/bin/python3 -m pip install -r requirements-ml.txt"
+    ) from exc
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ml import FEATURE_NAMES, PlattCalibratedModel  # noqa: E402
+from ml_artifacts import FEATURE_NAMES, PlattCalibratedModel  # noqa: E402
 
 
 def load_csv(path: str):

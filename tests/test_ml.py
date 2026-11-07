@@ -1,4 +1,9 @@
 import csv
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import numpy as np
 
 from detection_pipeline import Classification, DetectionInput
@@ -10,6 +15,34 @@ from ml import (
     RuntimeFeatureBuilder,
 )
 from scripts.train_commercial_model import train
+
+
+def test_export_script_does_not_import_opencv(tmp_path):
+    blocker = tmp_path / "blocked-imports"
+    blocker.mkdir()
+    (blocker / "cv2.py").write_text("raise RuntimeError('export imported OpenCV')\n")
+    output = tmp_path / "features.csv"
+    script = Path(__file__).parents[1] / "scripts" / "export_feature_dataset.py"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(blocker)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--database",
+            str(tmp_path / "features.sqlite3"),
+            "--output",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert "Exported 0 labeled samples" in result.stdout
+    assert output.exists()
 
 
 def test_runtime_feature_builder_has_stable_schema_and_temporal_features():

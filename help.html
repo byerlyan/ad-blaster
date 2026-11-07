@@ -136,7 +136,7 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
     <p class="lede">The Legacy detector is the dependable starting point. Once it recognizes your channel consistently, collect real labels, train the optional classifier, and compare Hybrid in Shadow mode before allowing automatic muting.</p>
     <div class="hero-note" role="note">
       <span aria-hidden="true">⚠</span>
-      <div><strong>Keep automatic muting off while tuning.</strong> Shadow mode runs detection and records decisions without controlling Apple TV volume.</div>
+      <div><strong>Shadow mode is a hard no-control boundary.</strong> It never connects to Apple TV control, and both automatic and manual mute, unmute, and skip commands are blocked. Detection, labeling, and training continue normally.</div>
     </div>
 
     <section id="quick-start">
@@ -241,15 +241,20 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
       <div class="code-block"><pre><code># Intel macOS / MacPorts installation
 ./venv-macports/bin/python3 -m pip install -r requirements-ml.txt
 
-# Apple silicon macOS, Linux, or a project venv
-./venv/bin/python3 -m pip install -r requirements-ml.txt</code></pre></div>
+# Installed app on Apple silicon macOS or Linux
+./venv/bin/python3 -m pip install -r requirements-ml.txt
+
+# Source checkout (this repository)
+./.venv/bin/python3 -m pip install -r requirements-ml.txt</code></pre></div>
       <h3>3. Export and train</h3>
       <p>You can download the raw CSV from <strong>Home → Training &amp; Trusted Ads</strong>, or run both commands locally:</p>
-      <div class="code-block"><pre><code>python3 scripts/export_feature_dataset.py --output data/features.csv
+      <div class="code-block"><pre><code># Source checkout: keep both commands in the same virtual environment
+./.venv/bin/python3 scripts/export_feature_dataset.py --output data/features.csv
 
-python3 scripts/train_commercial_model.py \
+./.venv/bin/python3 scripts/train_commercial_model.py \
   --dataset data/features.csv \
   --output data/commercial_model.joblib</code></pre></div>
+      <p>For an installed copy, replace <code>./.venv/bin/python3</code> with <code>./venv/bin/python3</code>, or <code>./venv-macports/bin/python3</code> on Intel macOS. Use the same executable for installation, export, and training; the shell’s plain <code>python3</code> may be Apple’s unrelated Command Line Tools Python.</p>
       <p>The trainer requires both labels and enough distinct source/session groups to separate fitting, calibration, and testing. The saved artifact includes its schema, dataset digest, group assignments, precision, and recall.</p>
       <h3>4. Turn on the trained classifier</h3>
       <ol class="checklist">

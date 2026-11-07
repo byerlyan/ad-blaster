@@ -426,6 +426,10 @@ class Engine:
 
     async def _controller_action(self, method: str, *args):
         """Run one controller call, reconnecting once after a disconnect."""
+        if self._shadow:
+            raise RuntimeError(
+                "Shadow mode blocks all Apple TV control commands"
+            )
         if self._controller is None:
             raise ConnectionError("playback controller is unavailable")
         try:
@@ -713,6 +717,10 @@ class Engine:
 
     async def manual_mute(self) -> bool:
         """Explicit user volume action, independent from automatic muting."""
+        if self._shadow:
+            raise RuntimeError(
+                "Shadow mode is detection-only; mute commands are blocked"
+            )
         if self._controller is None:
             raise RuntimeError("Apple TV control is not connected")
         changed = await self._mute_if_needed()
@@ -723,6 +731,10 @@ class Engine:
 
     async def manual_unmute(self) -> bool:
         """Explicit user restore plus cooldown against immediate re-muting."""
+        if self._shadow:
+            raise RuntimeError(
+                "Shadow mode is detection-only; volume commands are blocked"
+            )
         if self._controller is None:
             raise RuntimeError("Apple TV control is not connected")
         changed = await self._unmute_if_needed(force=True)

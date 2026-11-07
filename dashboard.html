@@ -67,6 +67,8 @@ body {
 }
 .badge-green { background: var(--green-dim); color: var(--green); }
 .badge-red { background: var(--red-dim); color: var(--red); }
+.badge-active { background: var(--accent-dim); color: var(--accent); }
+.badge-shadow { background: var(--yellow-dim); color: var(--yellow); }
 .badge-off { background: var(--surface2); color: var(--text3); }
 
 /* Tab navigation */
@@ -394,6 +396,11 @@ select:focus, .input:focus { border-color: var(--accent); }
 .activity-item:last-child { border:0; }
 .connection-status { display:none; position:sticky; top:0; z-index:90; padding:9px 16px; text-align:center; background:#39201b; color:#f0b4a5; border-bottom:1px solid var(--red); }
 .connection-status.show { display:block; }
+.control-mode-bar { display:none; position:sticky; top:0; z-index:85; padding:10px 18px; border-bottom:1px solid; text-align:center; font-size:.78rem; font-weight:600; letter-spacing:.01em; }
+.control-mode-bar.show { display:block; }
+.control-mode-bar.shadow { background:#302a18; border-color:var(--yellow); color:#ead799; }
+.control-mode-bar.active { background:#352019; border-color:var(--accent); color:#f0b398; }
+.control-mode-bar.paused { background:var(--surface2); border-color:var(--text3); color:var(--text2); }
 .modal-backdrop { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(10,8,6,.88); }
 .modal-backdrop.hidden { display:none; }
 .modal { width:min(520px,100%); max-height:90vh; overflow:auto; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; box-shadow:0 24px 80px #000; }
@@ -490,6 +497,7 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
       <span class="badge badge-off" id="engine-badge">Offline</span>
     </div>
   </div>
+  <div id="control-mode-bar" class="control-mode-bar" role="status" aria-live="polite"></div>
 
   <!-- WATCH: everyday view, status, controls, timeline -->
   <div class="main cols-2" id="tab-watch">
@@ -507,8 +515,8 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
         <div class="quick-actions" aria-label="Quick corrections and volume controls" aria-describedby="quick-label-help">
           <button class="btn-green" onclick="correctNow('program')" title="Save the current detector evidence as a Program correction">This is a Program</button>
           <button class="btn-red" onclick="correctNow('commercial')" title="Save the current detector evidence as a Commercial correction">This is a Commercial</button>
-          <button onclick="manualVolume('mute')">Mute now</button>
-          <button onclick="manualVolume('unmute')">Unmute now</button>
+          <button id="btn-manual-mute" onclick="manualVolume('mute')" disabled>Mute now</button>
+          <button id="btn-manual-unmute" onclick="manualVolume('unmute')" disabled>Unmute now</button>
         </div>
         <div id="quick-label-help" style="margin-top:7px;font-size:.7rem;color:var(--text3)">These two labels save one timestamped evidence snapshot for Activity review. They do not immediately change detector state, volume, thresholds, or the trained model. Use Settings → Tune Thresholds for training windows.</div>
         <div id="correction-undo" class="hidden" style="margin-top:8px;font-size:.78rem;color:var(--text2)">Label saved. <button class="btn-sm" onclick="undoLastCorrection()">Undo</button></div>
@@ -563,7 +571,7 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
             </div>
             <div style="margin:-4px 0 10px;font-size:.7rem;color:var(--text3)">This is the saved calibration image, not a live camera view. If it shows the wrong camera, select the HDMI capture card and overwrite this profile.</div>
             <div class="btn-group">
-              <button class="btn-green" style="flex:2" onclick="applyProfile()">Apply Profile</button>
+              <button class="btn-green" style="flex:2" onclick="applyProfile()">Start Active with Profile</button>
               <button class="btn-red" onclick="deleteProfile()">Delete</button>
             </div>
           </div>
@@ -574,13 +582,13 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
       <div class="section">
         <div class="section-title">Controls</div>
         <div class="btn-group" id="ctl-start-group" style="margin-bottom:8px">
-          <div class="btn-col"><button class="btn-accent" id="btn-start" onclick="startEngine()">Start</button><div class="btn-desc">Use the selected profile &amp; start</div></div>
-          <div class="btn-col"><button id="btn-shadow" onclick="startShadow()">Shadow</button><div class="btn-desc">Detect only, no TV control</div></div>
+          <div class="btn-col"><button class="btn-accent" id="btn-start" onclick="startEngine()">Start Active Control</button><div class="btn-desc">Apple TV mute/skip enabled</div></div>
+          <div class="btn-col"><button id="btn-shadow" onclick="startShadow()">Start Shadow Mode</button><div class="btn-desc">Detection only · TV commands blocked</div></div>
         </div>
         <div class="btn-group" id="ctl-run-group" style="margin-bottom:8px;display:none">
           <div class="btn-col"><button class="btn-red" id="btn-stop" onclick="stopEngine()" disabled>Stop</button><div class="btn-desc">Stop the engine</div></div>
-          <div class="btn-col"><button id="btn-disarm" onclick="disarm()" disabled style="background:var(--red-dim);color:var(--red);border-color:var(--red)">Disarm</button><div class="btn-desc">Unmute &amp; reset now</div></div>
-          <div class="btn-col"><button id="btn-toggle" onclick="toggleEngine()" disabled>Pause</button><div class="btn-desc">Pause actions, keep watching</div></div>
+          <div class="btn-col"><button id="btn-disarm" onclick="disarm()" disabled style="background:var(--red-dim);color:var(--red);border-color:var(--red)">Disarm</button><div class="btn-desc" id="disarm-desc">Unmute &amp; reset now</div></div>
+          <div class="btn-col"><button id="btn-toggle" onclick="toggleEngine()" disabled>Pause</button><div class="btn-desc" id="toggle-desc">Pause actions, keep watching</div></div>
         </div>
       </div>
 
@@ -717,7 +725,6 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
           <label class="setting-row"><span class="setting-name">Mute detected commercials</span><input type="checkbox" id="basic-auto-muting"></label>
           <label class="setting-row"><span class="setting-name">Skip commercials on delayed playback</span><input type="checkbox" id="basic-auto-skipping"></label>
           <div style="font-size:0.72rem;color:var(--text3);margin:-4px 0 8px">These controls are independent. Leave skipping off for mute-only operation. Live playback is never skipped.</div>
-          <label class="setting-row"><span class="setting-name">Start in shadow mode</span><input type="checkbox" id="basic-shadow"></label>
           <div class="settings-actions">
             <button onclick="cancelSettings()">Cancel</button>
             <button class="btn-accent" onclick="saveBasicSettings()">Save basic settings</button>
@@ -909,7 +916,7 @@ body.connection-lost .main button, body.connection-lost #tab-setup button { opac
 </div>
 
 <script>
-const POLL_MS=1000;let polling=null,currentChannel=null,lastError=null,connectionFailures=0,lastCorrectionId=null,settingsSnapshot=null,settingsSnapshotProfile='',sensitivityDirty=false,audioDevicesLoaded=false,pendingAppleTVPair=null,wizardAppleTVPairs={Companion:null,AirPlay:null},wizardStep=0;
+const POLL_MS=1000;let polling=null,currentChannel=null,lastError=null,connectionFailures=0,lastCorrectionId=null,settingsSnapshot=null,settingsSnapshotProfile='',sensitivityDirty=false,audioDevicesLoaded=false,currentShadowMode=false,pendingAppleTVPair=null,wizardAppleTVPairs={Companion:null,AirPlay:null},wizardStep=0;
 
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b!==undefined)o.body=JSON.stringify(b);const r=await fetch(p,o);if(!r.ok){const d=(await r.json().catch(()=>({}))).detail||r.statusText;throw new Error(d)}return r.status===204?{}:r.json()}
 function showBanner(m,t='error'){const e=document.getElementById('banner');e.textContent=m;e.className='banner '+t;e.style.display='block';setTimeout(()=>{e.style.display='none'},6000)}
@@ -917,12 +924,12 @@ function showError(m){showBanner(m,'error')}
 function showSuccess(m){showBanner(m,'success')}
 
 function selectedDetectionMode(){return document.getElementById('detection-mode').value||'legacy'}
-async function startEngine(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:localStorage.getItem('startShadow')==='true',detection_mode:selectedDetectionMode()})}catch(e){showError(e.message)}}
+async function startEngine(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:false,detection_mode:selectedDetectionMode()})}catch(e){showError(e.message)}}
 async function startShadow(){try{const ch=document.getElementById('channel-select').value||null;await api('POST','/api/start',{channel:ch,shadow:true,detection_mode:selectedDetectionMode()})}catch(e){showError(e.message)}}
 async function stopEngine(){try{await api('POST','/api/stop')}catch(e){showError(e.message)}}
 async function toggleEngine(){try{await api('POST','/api/toggle')}catch(e){showError(e.message)}}
 async function disarm(){try{await api('POST','/api/disarm');showSuccess('Disarmed.')}catch(e){showError(e.message)}}
-async function manualVolume(action){try{await api('POST','/api/control/'+action);showSuccess(action==='mute'?'Muted.':'Volume restored.')}catch(e){showError(e.message)}}
+async function manualVolume(action){if(currentShadowMode){showError('Shadow mode is detection-only. Apple TV volume commands are blocked.');return}try{await api('POST','/api/control/'+action);showSuccess(action==='mute'?'Muted.':'Volume restored.')}catch(e){showError(e.message)}}
 async function correctNow(label){try{const r=await api('POST','/api/corrections',{label,action:'none'});lastCorrectionId=r.correction.id;const box=document.getElementById('correction-undo');box.classList.remove('hidden');box.firstChild.textContent=r.created?'Current moment saved as '+(label==='program'?'Program':'Commercial')+'. Detector behavior was not changed. ':'That moment was already labeled. ';setTimeout(()=>box.classList.add('hidden'),8000);await loadActivity()}catch(e){showError(e.message)}}
 async function undoLastCorrection(){if(!lastCorrectionId)return;try{await api('POST','/api/corrections/'+encodeURIComponent(lastCorrectionId)+'/undo');document.getElementById('correction-undo').classList.add('hidden');showSuccess('Correction undone.');await loadActivity()}catch(e){showError(e.message)}}
 
@@ -1080,7 +1087,7 @@ async function finishWizardAppleTVPair(protocol){
   }finally{finish.disabled=false}
 }
 
-async function calibrate(){const b=document.getElementById('btn-calibrate');try{b.disabled=true;b.textContent='Calibrating...';const ch=document.getElementById('channel-select').value||null;const r=await api('POST','/api/calibrate',{channel:ch});showSuccess('Done: '+r.channel);await loadProfileDetails(r.channel)}catch(e){showError(e.message)}finally{b.disabled=false;b.textContent='Recalibrate'}}
+async function calibrate(){const b=document.getElementById('btn-calibrate'),seconds=(settingsSnapshot&&Number(settingsSnapshot.CALIBRATION_DURATION))||60;let stopCountdown=()=>{};try{b.disabled=true;stopCountdown=startSampleCountdown(seconds,remaining=>{b.textContent=remaining>0?'Sampling '+remaining+'s...':'Processing profile...'});const ch=document.getElementById('channel-select').value||null;const r=await api('POST','/api/calibrate',{channel:ch});showSuccess('Done: '+r.channel);await loadProfileDetails(r.channel)}catch(e){showError(e.message)}finally{stopCountdown();b.disabled=false;b.textContent='Recalibrate'}}
 async function fetchFullFrame(){try{const d=await api('GET','/api/frame');document.getElementById('img-full-frame').src='data:image/jpeg;base64,'+d.frame_b64;document.getElementById('full-frame-box').classList.remove('hidden')}catch(e){showError(e.message)}}
 
 async function loadProfileDetails(ch){try{const d=await api('GET','/api/profile/'+ch);
@@ -1138,7 +1145,7 @@ async function previewProfile(){
 async function applyProfile(){
   const ch=document.getElementById('channel-select').value;
   if(!ch){showError('Select a profile first.');return}
-  try{await api('POST','/api/start',{channel:ch,detection_mode:selectedDetectionMode()});showSuccess('Started with '+ch.toUpperCase())}
+  try{await api('POST','/api/start',{channel:ch,shadow:false,detection_mode:selectedDetectionMode()});showSuccess('Active control started with '+ch.toUpperCase())}
   catch(e){showError(e.message)}
 }
 
@@ -1175,19 +1182,30 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   const t=parseFloat(document.getElementById('set-threshold').value)||0.35;
   const badge=document.getElementById('engine-badge');
   const running=['running','disabled'].includes(s.engine_state);
+  const shadow=running&&!!s.shadow_mode;
+  currentShadowMode=shadow;
   engineRunning=running;
   if(running)document.getElementById('detection-mode').value=s.detection_mode||'legacy';
   document.getElementById('detection-mode').disabled=running;
   const isCommercial=running&&s.detection_state==='commercial';
 
+  // Persistent control-mode contract
+  const modeBar=document.getElementById('control-mode-bar');
+  if(shadow){modeBar.className='control-mode-bar show shadow';modeBar.textContent='SHADOW MODE · Detection and training only. Apple TV control is disconnected; mute, unmute, and skip commands are blocked.'}
+  else if(s.engine_state==='running'){modeBar.className='control-mode-bar show active';modeBar.textContent='ACTIVE CONTROL · The Clicker may send automatic mute and skip commands to the Apple TV.'}
+  else if(s.engine_state==='disabled'){modeBar.className='control-mode-bar show paused';modeBar.textContent='ACTIVE SESSION PAUSED · Automatic actions are paused; Apple TV control remains connected.'}
+  else{modeBar.className='control-mode-bar';modeBar.textContent=''}
+
   // Badge
-  if(s.engine_state==='running'){badge.textContent='Active';badge.className='badge badge-green'}
-  else if(s.engine_state==='disabled'){badge.textContent='Paused';badge.className='badge badge-off'}
+  if(s.engine_state==='running'&&shadow){badge.textContent='Shadow';badge.className='badge badge-shadow'}
+  else if(s.engine_state==='running'){badge.textContent='Active Control';badge.className='badge badge-active'}
+  else if(s.engine_state==='disabled'&&shadow){badge.textContent='Shadow Paused';badge.className='badge badge-shadow'}
+  else if(s.engine_state==='disabled'){badge.textContent='Active Paused';badge.className='badge badge-off'}
   else if(s.engine_state==='error'){badge.textContent='Error';badge.className='badge badge-red'}
   else{badge.textContent='Offline';badge.className='badge badge-off'}
 
   // Hero
-  document.getElementById('s-engine-label').textContent=s.engine_state==='stopped'?'Engine Stopped':s.engine_state==='running'?'Detecting':s.engine_state==='disabled'?'Monitoring Only':s.engine_state==='error'?'Engine Error':s.engine_state;
+  document.getElementById('s-engine-label').textContent=s.engine_state==='stopped'?'Engine Stopped':shadow?(s.engine_state==='disabled'?'Shadow Mode · Paused':'Shadow Mode · Detection Only'):s.engine_state==='running'?'Active Control · Detecting':s.engine_state==='disabled'?'Active Control · Paused':s.engine_state==='error'?'Engine Error':s.engine_state;
   const dot=document.getElementById('hero-dot');
   const stateColor=!running?'var(--text3)':(isCommercial?'var(--red)':'var(--green)'),stateLabel=!running?'Idle':(s.detection_state==='watching'?'Watching':s.detection_state==='commercial'?'Commercial':'Idle');
   dot.style.background=stateColor;dot.style.color=stateColor;
@@ -1216,8 +1234,12 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
   document.getElementById('btn-shadow').disabled=running;
   document.getElementById('btn-stop').disabled=!running;
   document.getElementById('btn-disarm').disabled=!running;
-  document.getElementById('btn-toggle').disabled=!running;
+  document.getElementById('btn-toggle').disabled=!running||shadow;
   document.getElementById('btn-toggle').textContent=s.engine_state==='running'?'Pause':'Resume';
+  document.getElementById('toggle-desc').textContent=shadow?'Shadow mode has no actions to pause':'Pause automatic actions, keep detecting';
+  document.getElementById('btn-disarm').textContent=shadow?'Reset Detection':'Disarm';
+  document.getElementById('disarm-desc').textContent=shadow?'Reset detector state; no TV command':'Unmute & reset now';
+  for(const id of ['btn-manual-mute','btn-manual-unmute']){const button=document.getElementById(id);button.disabled=!running||shadow;button.title=shadow?'Unavailable: shadow mode blocks all Apple TV control commands.':''}
 
   // State aware visibility: show start actions when stopped, run actions when running
   document.getElementById('ctl-start-group').style.display=running?'none':'';
@@ -1289,10 +1311,10 @@ const SM={'set-first-skip':'FIRST_SKIP_COUNT','set-subsequent-skip':'SUBSEQUENT_
 Object.assign(SM,{'set-audio-device':'AUDIO_DEVICE_NAME','set-audio-threshold':'AUDIO_TRANSITION_SCORE_THRESHOLD','set-fingerprint-threshold':'FINGERPRINT_MATCH_THRESHOLD','set-ml-program':'ML_PROGRAM_THRESHOLD','set-ml-commercial':'ML_COMMERCIAL_THRESHOLD','set-fusion-exit':'HYBRID_PROGRAM_EXIT_THRESHOLD','set-fusion-enter':'HYBRID_COMMERCIAL_ENTER_THRESHOLD','set-weight-audio':'HYBRID_AUDIO_TRANSITION_WEIGHT','set-weight-fingerprint':'HYBRID_FINGERPRINT_WEIGHT','set-weight-ad-overlay':'HYBRID_AD_OVERLAY_WEIGHT','set-weight-ml':'HYBRID_ML_WEIGHT'});
 function selectAudioDeviceValue(name){const select=document.getElementById('set-audio-device');if(!select)return;for(const option of [...select.options]){if(option.dataset.unavailable==='true')option.remove()}const value=name||'';if(value&&![...select.options].some(option=>option.value===value)){const option=document.createElement('option');option.value=value;option.textContent=value+' (currently unavailable)';option.dataset.unavailable='true';select.appendChild(option)}select.value=value}
 async function scanAudioDevices(preferred,announce=false){const select=document.getElementById('set-audio-device'),status=document.getElementById('audio-device-status');if(!select||!status)return;const prior=preferred!==undefined?preferred:(select.value||(settingsSnapshot&&settingsSnapshot.AUDIO_DEVICE_NAME)||'');select.disabled=true;status.textContent='Scanning FFmpeg audio inputs...';try{const r=await api('GET','/api/devices/audio');select.innerHTML='<option value="">Select an audio input...</option>';for(const device of r.devices){const option=document.createElement('option');option.value=device.name;option.textContent=device.name;option.dataset.deviceId=device.id;select.appendChild(option)}selectAudioDeviceValue(prior||r.selected||'');audioDevicesLoaded=true;if(r.error)status.textContent=r.error;else status.textContent=r.devices.length+' audio input'+(r.devices.length===1?'':'s')+' found. Restart the engine after changing it.';if(announce&&!r.error)showSuccess('Audio inputs refreshed.')}catch(e){status.textContent='Audio device scan failed: '+e.message;if(announce)showError(e.message)}finally{select.disabled=false}}
-async function loadSettings(){try{const d=await api('GET','/api/settings');settingsSnapshot=d;settingsSnapshotProfile=localStorage.getItem('selectedProfile')||'';document.getElementById('basic-profile-select').value=settingsSnapshotProfile;document.getElementById('channel-select').value=settingsSnapshotProfile;if(d.DETECTION_MODE){document.getElementById('detection-mode').value=d.DETECTION_MODE;document.getElementById('basic-detection-mode').value=d.DETECTION_MODE}document.getElementById('basic-auto-muting').checked=!!d.AUTOMATIC_MUTING_ENABLED;document.getElementById('basic-auto-skipping').checked=!!d.AUTOMATIC_SKIPPING_ENABLED;document.getElementById('basic-shadow').checked=localStorage.getItem('startShadow')==='true';const preset=d._meta&&d._meta.active_preset;const map={conservative:0,balanced:1,aggressive:2};document.getElementById('sensitivity-slider').value=preset in map?map[preset]:1;document.getElementById('custom-overrides').classList.toggle('hidden',!!preset);sensitivityDirty=false;sensitivityChanged(false);for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el||d[k]===undefined)continue;if(el.type==='checkbox')el.checked=!!d[k];else el.value=d[k]}selectAudioDeviceValue(d.AUDIO_DEVICE_NAME)}catch(e){showError(e.message)}}
+async function loadSettings(){try{const d=await api('GET','/api/settings');settingsSnapshot=d;settingsSnapshotProfile=localStorage.getItem('selectedProfile')||'';document.getElementById('basic-profile-select').value=settingsSnapshotProfile;document.getElementById('channel-select').value=settingsSnapshotProfile;if(d.DETECTION_MODE){document.getElementById('detection-mode').value=d.DETECTION_MODE;document.getElementById('basic-detection-mode').value=d.DETECTION_MODE}document.getElementById('basic-auto-muting').checked=!!d.AUTOMATIC_MUTING_ENABLED;document.getElementById('basic-auto-skipping').checked=!!d.AUTOMATIC_SKIPPING_ENABLED;const preset=d._meta&&d._meta.active_preset;const map={conservative:0,balanced:1,aggressive:2};document.getElementById('sensitivity-slider').value=preset in map?map[preset]:1;document.getElementById('custom-overrides').classList.toggle('hidden',!!preset);sensitivityDirty=false;sensitivityChanged(false);for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el||d[k]===undefined)continue;if(el.type==='checkbox')el.checked=!!d[k];else el.value=d[k]}selectAudioDeviceValue(d.AUDIO_DEVICE_NAME)}catch(e){showError(e.message)}}
 function sensitivityChanged(dirty=true){const names=['Conservative','Balanced','Aggressive'],value=Number(document.getElementById('sensitivity-slider').value);document.getElementById('sensitivity-label').textContent=names[value];if(dirty)sensitivityDirty=true}
 function setSettingsLevel(level){localStorage.setItem('settingsLevel',level);const advanced=level==='advanced';document.getElementById('settings-basic').classList.toggle('hidden',advanced);document.getElementById('settings-devices').classList.toggle('hidden',advanced);document.getElementById('settings-advanced').classList.toggle('hidden',!advanced);document.getElementById('settings-tuning-panel').classList.toggle('hidden',!advanced);document.getElementById('settings-level-basic').classList.toggle('active',!advanced);document.getElementById('settings-level-advanced').classList.toggle('active',advanced);if(advanced&&!audioDevicesLoaded)setTimeout(()=>scanAudioDevices(undefined,false),0)}
-async function saveBasicSettings(){try{if(sensitivityDirty){const names=['conservative','balanced','aggressive'];await api('POST','/api/preset',{name:names[Number(document.getElementById('sensitivity-slider').value)]})}await api('POST','/api/settings',{DETECTION_MODE:document.getElementById('basic-detection-mode').value,AUTOMATIC_MUTING_ENABLED:document.getElementById('basic-auto-muting').checked,AUTOMATIC_SKIPPING_ENABLED:document.getElementById('basic-auto-skipping').checked});localStorage.setItem('startShadow',String(document.getElementById('basic-shadow').checked));localStorage.setItem('selectedProfile',document.getElementById('basic-profile-select').value);await loadSettings();showSuccess('Basic settings saved.')}catch(e){showError(e.message)}}
+async function saveBasicSettings(){try{if(sensitivityDirty){const names=['conservative','balanced','aggressive'];await api('POST','/api/preset',{name:names[Number(document.getElementById('sensitivity-slider').value)]})}await api('POST','/api/settings',{DETECTION_MODE:document.getElementById('basic-detection-mode').value,AUTOMATIC_MUTING_ENABLED:document.getElementById('basic-auto-muting').checked,AUTOMATIC_SKIPPING_ENABLED:document.getElementById('basic-auto-skipping').checked});localStorage.setItem('selectedProfile',document.getElementById('basic-profile-select').value);await loadSettings();showSuccess('Basic settings saved.')}catch(e){showError(e.message)}}
 async function cancelSettings(){await loadSettings();showSuccess('Unsaved changes discarded.')}
 async function saveSettings(){const s={DETECTION_MODE:selectedDetectionMode()};for(const[id,k]of Object.entries(SM)){const el=document.getElementById(id);if(!el)continue;s[k]=(k==='PLAYBACK_MODE_OVERRIDE'||k==='AUDIO_DEVICE_NAME'||el.type==='text')?el.value:(el.type==='checkbox'?el.checked:parseFloat(el.value))}try{await api('POST','/api/settings',s);await loadSettings();const st=document.getElementById('settings-status');st.style.display='inline';setTimeout(()=>{st.style.display='none'},2000)}catch(e){showError(e.message)}}
 async function applyPreset(name){try{const r=await api('POST','/api/preset',{name});await loadSettings();showSuccess('Applied '+name+' preset.')}catch(e){showError(e.message)}}
@@ -1302,6 +1324,9 @@ async function importSettings(input){const file=input.files&&input.files[0];if(!
 
 // Calibration canvas
 let snapshotImg=null,snapshotW=0,snapshotH=0,drawStart=null,drawEnd=null,selectedROI=null,touchMode=null,touchOrigin=null,roiOrigin=null,pinchDistance=0,canvasZoom=1;
+
+function startSampleCountdown(seconds,render){const total=Math.max(1,Math.ceil(Number(seconds)||60)),deadline=Date.now()+total*1000;let timer=null;const update=()=>{const remaining=Math.max(0,Math.ceil((deadline-Date.now())/1000));render(remaining);if(remaining===0&&timer!==null){clearInterval(timer);timer=null}};update();timer=setInterval(update,250);return()=>{if(timer!==null){clearInterval(timer);timer=null}}}
+function profileSampleSeconds(duration){return Number(duration)||(settingsSnapshot&&Number(settingsSnapshot.CALIBRATION_DURATION))||60}
 
 function canvasCoord(c,cx,cy){const r=c.getBoundingClientRect();return{x:(cx-r.left)*(c.width/r.width),y:(cy-r.top)*(c.height/r.height)}}
 
@@ -1333,15 +1358,15 @@ if(selectedROI){const sc=parseFloat(c.dataset.scale),x=selectedROI.x*sc,y=select
 function calDuration(){const v=parseInt(document.getElementById('cal-duration').value,10);return Number.isFinite(v)&&v>0?v:null}
 
 async function saveProfile(){const ch=document.getElementById('cal-channel-name').value.trim().toLowerCase();if(!ch){showError('Enter a channel name.');return}if(!selectedROI){showError('Draw a rectangle.');return}
-const dur=calDuration();const btn=document.getElementById('btn-save-profile');
-try{btn.disabled=true;btn.textContent='Sampling '+(dur||60)+'s...';await api('POST','/api/calibrate/interactive',{channel:ch,x:selectedROI.x,y:selectedROI.y,w:selectedROI.w,h:selectedROI.h,duration:dur});showSuccess(ch.toUpperCase()+' saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent='Save Logo Profile'}}
+const dur=calDuration(),seconds=profileSampleSeconds(dur),btn=document.getElementById('btn-save-profile');let stopCountdown=()=>{};
+try{btn.disabled=true;stopCountdown=startSampleCountdown(seconds,remaining=>{btn.textContent=remaining>0?'Sampling '+remaining+'s...':'Processing profile...'});await api('POST','/api/calibrate/interactive',{channel:ch,x:selectedROI.x,y:selectedROI.y,w:selectedROI.w,h:selectedROI.h,duration:dur});showSuccess(ch.toUpperCase()+' saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{stopCountdown();btn.disabled=false;btn.textContent='Save Logo Profile'}}
 
 async function saveColorProfile(){const ch=document.getElementById('cal-channel-name').value.trim().toLowerCase();if(!ch){showError('Enter a channel name.');return}
-const dur=calDuration();const btn=document.getElementById('btn-save-color');const body={channel:ch,duration:dur};if(selectedROI){body.x=selectedROI.x;body.y=selectedROI.y;body.w=selectedROI.w;body.h=selectedROI.h}
-try{btn.disabled=true;btn.textContent='Sampling '+(dur||60)+'s...';await api('POST','/api/calibrate/color',body);showSuccess(ch.toUpperCase()+' color profile saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent='Save Color Profile'}}
+const dur=calDuration(),seconds=profileSampleSeconds(dur),btn=document.getElementById('btn-save-color'),body={channel:ch,duration:dur};let stopCountdown=()=>{};if(selectedROI){body.x=selectedROI.x;body.y=selectedROI.y;body.w=selectedROI.w;body.h=selectedROI.h}
+try{btn.disabled=true;stopCountdown=startSampleCountdown(seconds,remaining=>{btn.textContent=remaining>0?'Sampling '+remaining+'s...':'Processing profile...'});await api('POST','/api/calibrate/color',body);showSuccess(ch.toUpperCase()+' color profile saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{stopCountdown();btn.disabled=false;btn.textContent='Save Color Profile'}}
 
 async function saveComboProfile(){const ch=document.getElementById('cal-channel-name').value.trim().toLowerCase();if(!ch){showError('Enter a channel name.');return}if(!selectedROI){showError('Draw a rectangle around the logo region.');return}
-const dur=calDuration();const btn=document.getElementById('btn-save-combo');try{btn.disabled=true;btn.textContent='Sampling '+(dur||60)+'s...';await api('POST','/api/calibrate/combo',{channel:ch,x:selectedROI.x,y:selectedROI.y,w:selectedROI.w,h:selectedROI.h,duration:dur});showSuccess(ch.toUpperCase()+' combo profile saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{btn.disabled=false;btn.textContent='Save Logo + Color'}}
+const dur=calDuration(),seconds=profileSampleSeconds(dur),btn=document.getElementById('btn-save-combo');let stopCountdown=()=>{};try{btn.disabled=true;stopCountdown=startSampleCountdown(seconds,remaining=>{btn.textContent=remaining>0?'Sampling '+remaining+'s...':'Processing profile...'});await api('POST','/api/calibrate/combo',{channel:ch,x:selectedROI.x,y:selectedROI.y,w:selectedROI.w,h:selectedROI.h,duration:dur});showSuccess(ch.toUpperCase()+' combo profile saved.');await loadProfiles();await loadProfileDetails(ch)}catch(e){showError(e.message)}finally{stopCountdown();btn.disabled=false;btn.textContent='Save Logo + Color'}}
 
 // ---------- Threshold tuning ----------
 let activeMark=null;
@@ -1426,13 +1451,13 @@ async function runWizardCalibration(){
   const channel=input.value.trim().toLowerCase();
   if(!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(channel)){status.className='wizard-check-status error';status.textContent='Enter a short channel name using letters, numbers, dashes, or underscores.';input.focus();return}
   const seconds=(settingsSnapshot&&settingsSnapshot.CALIBRATION_DURATION)||60;
-  input.disabled=true;button.disabled=true;button.textContent='Calibrating...';status.className='wizard-check-status checking';status.textContent='Sampling '+channel.toUpperCase()+' for about '+seconds+' seconds. Keep normal programming with the channel logo visible.';
+  let stopCountdown=()=>{};input.disabled=true;button.disabled=true;status.className='wizard-check-status checking';stopCountdown=startSampleCountdown(seconds,remaining=>{button.textContent=remaining>0?'Sampling '+remaining+'s...':'Processing profile...';status.textContent=remaining>0?'Sampling '+channel.toUpperCase()+': '+remaining+' seconds remaining. Keep normal programming with the channel logo visible.':'Sampling complete. Processing '+channel.toUpperCase()+' profile...'});
   try{
     const result=await api('POST','/api/calibrate',{channel});
     input.value='';await loadProfiles();await loadWizardProfiles(result.channel);
     status.className='wizard-check-status success';status.textContent=result.channel.toUpperCase()+' profile created and selected.';
   }catch(e){status.className='wizard-check-status error';status.textContent='Calibration failed: '+e.message}
-  finally{input.disabled=false;button.disabled=false;button.textContent='Create profile'}
+  finally{stopCountdown();input.disabled=false;button.disabled=false;button.textContent='Create profile'}
 }
 
 function initializeWizardShadow(){
@@ -1451,7 +1476,7 @@ async function startWizardShadow(){
     const current=await api('GET','/api/status');
     if(['running','disabled'].includes(current.engine_state))await api('POST','/api/stop');
     await api('POST','/api/start',{channel:profile,shadow:true,detection_mode:mode});
-    localStorage.setItem('startShadow','true');status.className='wizard-check-status success';status.textContent='Shadow mode is running with '+profile.toUpperCase()+'. No mute or skip commands will be sent.';button.textContent='Restart shadow trial';
+    status.className='wizard-check-status success';status.textContent='Shadow mode is running with '+profile.toUpperCase()+'. Apple TV control is disconnected; mute and skip commands are blocked.';button.textContent='Restart shadow trial';
   }catch(e){status.className='wizard-check-status error';status.textContent='Could not start shadow mode: '+e.message;button.textContent='Start shadow trial'}
   finally{button.disabled=false}
 }
@@ -1473,7 +1498,6 @@ async function finishWizardSetup(){
     const current=await api('GET','/api/status');
     if(['running','disabled'].includes(current.engine_state)&&current.shadow_mode)await api('POST','/api/stop');
     if(!['running','disabled'].includes(current.engine_state)||current.shadow_mode)await api('POST','/api/start',{channel:profile,shadow:false,detection_mode:mode});
-    localStorage.setItem('startShadow','false');
     await api('POST','/api/setup',{complete:true,step:6});
     document.getElementById('setup-wizard').classList.add('hidden');showSuccess('Setup complete. Normal control is active with '+profile.toUpperCase()+'.');return true;
   }catch(e){status.className='wizard-check-status error';status.textContent='Could not activate normal control: '+e.message;return false}

@@ -1,6 +1,7 @@
 import asyncio
 
 import config
+import pytest
 from engine import Engine
 from intervention import AppleTVController
 
@@ -65,6 +66,26 @@ def test_appletv_controller_uses_runtime_selected_device(monkeypatch):
     controller = AppleTVController()
 
     assert controller._device_id == "selected-at-runtime"
+
+
+def test_shadow_mode_blocks_manual_and_internal_controller_commands():
+    engine = Engine()
+    controller = FakeController()
+    engine._shadow = True
+    engine._controller = controller
+
+    async def exercise():
+        with pytest.raises(RuntimeError, match="Shadow mode"):
+            await engine.manual_mute()
+        with pytest.raises(RuntimeError, match="Shadow mode"):
+            await engine.manual_unmute()
+        with pytest.raises(RuntimeError, match="Shadow mode"):
+            await engine._controller_action("mute")
+
+    asyncio.run(exercise())
+
+    assert controller.mute_calls == 0
+    assert controller.unmute_calls == 0
 
 
 def test_appletv_restores_exact_absolute_volume():

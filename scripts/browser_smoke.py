@@ -142,6 +142,73 @@ def assert_audio_device_dropdown(page) -> None:
     page.unroute("**/api/devices/audio")
 
 
+def assert_profile_sample_countdown(page) -> None:
+    ticks = page.evaluate(
+        """async () => {
+            const values = [];
+            const stop = startSampleCountdown(2, remaining => values.push(remaining));
+            await new Promise(resolve => setTimeout(resolve, 1150));
+            stop();
+            return values;
+        }"""
+    )
+    assert ticks[0] == 2, ticks
+    assert 1 in ticks, ticks
+
+
+def assert_control_mode_contract(page) -> None:
+    status = {
+        "engine_state": "running",
+        "detection_state": "watching",
+        "channel": None,
+        "confidence_edge": 0.0,
+        "confidence_template": 0.0,
+        "mode": None,
+        "commercial_duration": 0.0,
+        "detection_mode": "legacy",
+        "detector_results": [],
+        "fused_result": None,
+        "audio": {"available": False},
+        "fingerprint": {"available": False},
+        "ml": {"loaded": False},
+        "shadow_mode": True,
+        "recent_events": [],
+        "error": None,
+    }
+
+    page.route(
+        "**/api/status",
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(status)
+        ),
+    )
+    page.evaluate("() => pollStatus()")
+    page.wait_for_function(
+        "() => document.querySelector('#engine-badge').textContent === 'Shadow'"
+    )
+    bar = page.locator("#control-mode-bar")
+    assert bar.is_visible()
+    assert "SHADOW MODE" in bar.inner_text()
+    assert "commands are blocked" in bar.inner_text()
+    assert page.locator("#engine-badge").text_content() == "Shadow"
+    assert page.locator("#btn-manual-mute").is_disabled()
+    assert page.locator("#btn-manual-unmute").is_disabled()
+
+    status["shadow_mode"] = False
+    page.evaluate("() => pollStatus()")
+    page.wait_for_function(
+        "() => document.querySelector('#engine-badge').textContent === 'Active Control'"
+    )
+    assert "ACTIVE CONTROL" in bar.inner_text()
+    assert page.locator("#engine-badge").text_content() == "Active Control"
+    assert page.locator("#btn-manual-mute").is_enabled()
+    assert page.locator("#btn-manual-unmute").is_enabled()
+
+    status["engine_state"] = "stopped"
+    page.evaluate("() => pollStatus()")
+    page.unroute("**/api/status")
+
+
 def assert_wizard_appletv_pairing(page) -> None:
     started = []
     finished = []
@@ -391,6 +458,8 @@ def run_engine(playwright, name: str):
                 assert page.locator("#basic-auto-skipping").is_checked() == original_skip
 
             if width == 390:
+                assert_control_mode_contract(page)
+                assert_profile_sample_countdown(page)
                 assert_audio_device_dropdown(page)
                 assert_wizard_capture_feedback(page)
                 assert_wizard_appletv_pairing(page)

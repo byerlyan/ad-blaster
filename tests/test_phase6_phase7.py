@@ -139,6 +139,14 @@ def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     assert '<select class="input" id="set-audio-device"' in html
     assert 'input class="input" id="set-audio-device"' not in html
     assert "/api/devices/audio" in html
+    assert "function startSampleCountdown" in html
+    assert "Processing profile..." in html
+    assert "seconds remaining" in html
+    assert 'id="control-mode-bar"' in html
+    assert "SHADOW MODE · Detection and training only" in html
+    assert "shadow:false" in html
+    assert "shadow:localStorage" not in html
+    assert 'id="basic-shadow"' not in html
 
 
 def test_help_page_documents_legacy_training_and_safety_workflows():
