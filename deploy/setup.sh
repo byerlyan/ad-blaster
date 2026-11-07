@@ -60,7 +60,7 @@ pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
 # Copy project files (skip if already in the install directory)
 echo "[4/5] Setting up project files..."
 if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
-    for f in server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py pair.py corrections.py dashboard_auth.py device_setup.py dashboard.html help.html manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png requirements.txt requirements-dev.txt requirements-ml.txt requirements-browser.txt; do
+    for f in server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py pair.py corrections.py device_setup.py dashboard.html help.html manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png requirements.txt requirements-dev.txt requirements-ml.txt requirements-browser.txt; do
         if [ -f "$SCRIPT_DIR/$f" ]; then
             cp "$SCRIPT_DIR/$f" "$INSTALL_DIR/"
         fi
@@ -91,13 +91,7 @@ fi
 
 # Systemd service
 echo "[5/5] Installing systemd service..."
-CLICKER_BIND_ENV=""
-if [ -t 0 ]; then
-    read -r -p "Expose the dashboard to trusted devices on your home LAN? [y/N] " ENABLE_CLICKER_LAN
-    if [[ "$ENABLE_CLICKER_LAN" =~ ^[Yy]$ ]]; then
-        CLICKER_BIND_ENV="Environment=CLICKER_HOST=0.0.0.0"
-    fi
-fi
+CLICKER_BIND_ENV="Environment=CLICKER_HOST=0.0.0.0"
 cat > /etc/systemd/system/the-clicker.service << EOF
 [Unit]
 Description=The Clicker: Live TV Ad Blocker
@@ -146,13 +140,8 @@ echo "  1. Verify capture card: v4l2-ctl --list-devices"
 echo "  2. Pair Apple TV (if no credentials copied):"
 echo "     cd $INSTALL_DIR && source venv/bin/activate && python3 pair.py"
 echo "  3. Start the service: systemctl start the-clicker"
-if [ -n "$CLICKER_BIND_ENV" ]; then
-    echo "  4. Open dashboard: http://$(hostname -I | awk '{print $1}'):8080"
-    echo "     Pair mobile devices with the one-time code printed in journalctl."
-else
-    echo "  4. Open dashboard locally: http://127.0.0.1:8080"
-    echo "     To opt into LAN access, add Environment=CLICKER_HOST=0.0.0.0 to the service."
-fi
+echo "  4. Open dashboard: http://$(hostname -I | awk '{print $1}'):8080"
+echo "     Private-LAN devices connect directly; no dashboard pairing code is required."
 echo ""
 echo "Manage:"
 echo "  systemctl status the-clicker"

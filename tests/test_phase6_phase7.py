@@ -8,11 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 import config
-import dashboard_auth as auth_module
 import device_setup as device_setup_module
 import server
 from corrections import CorrectionStore
-from dashboard_auth import DashboardAuth
 from device_setup import AppleTVPairingError, AppleTVSetup
 
 
@@ -78,83 +76,18 @@ def test_corrections_are_durable_deduplicated_relabelable_and_undoable(tmp_path)
     assert CorrectionStore(tmp_path / "corrections.sqlite3").list()[0]["evidence"]["features"] == [1, 2]
 
 
-def test_auth_session_csrf_expiration_and_revocation(tmp_path, monkeypatch):
-    clock = [1_000.0]
-    monkeypatch.setattr(auth_module.time, "time", lambda: clock[0])
-    auth = DashboardAuth(
-        tmp_path / "auth.sqlite3",
-        enabled=True,
-        idle_seconds=10,
-        absolute_seconds=30,
-        pairing_ttl_seconds=60,
-    )
-    code = auth.pairing_code_for_host()
-    token, csrf, session = auth.pair(code, "Phone")
-    authenticated = auth.authenticate(token)
-    assert authenticated["device_name"] == "Phone"
-    assert auth.csrf_valid(authenticated, csrf)
-    assert not auth.csrf_valid(authenticated, "wrong")
-
-    clock[0] += 11
-    assert auth.authenticate(token) is None
-    assert auth.trusted_devices()[0]["active"] is False
-
-    code = auth.pairing_code_for_host()
-    token2, _, session2 = auth.pair(code, "Tablet")
-    assert auth.revoke(session2["id"])
-    assert auth.authenticate(token2) is None
-
-
-def test_pairing_attempts_are_rate_limited(tmp_path):
-    auth = DashboardAuth(tmp_path / "rate-limit.sqlite3", enabled=True)
-    for _ in range(8):
-        with pytest.raises(ValueError, match="Invalid"):
-            auth.pair("000000", "Attacker")
-    with pytest.raises(ValueError, match="Too many"):
-        auth.pair(auth.pairing_code_for_host(), "Phone")
-
-
-def test_localhost_mode_rejects_untrusted_host_header():
+def test_dashboard_uses_direct_private_lan_access_without_pairing(restore_settings):
     client = TestClient(server.app)
-    response = client.get("/api/status", headers={"Host": "rebound.example"})
-    assert response.status_code == 400
 
-
-def test_lan_api_requires_pairing_and_csrf_for_each_client(tmp_path, monkeypatch, restore_settings):
-    auth = DashboardAuth(tmp_path / "api-auth.sqlite3", enabled=True)
-    monkeypatch.setattr(server, "dashboard_auth", auth)
-    first = TestClient(server.app)
-    second = TestClient(server.app)
-
-    assert first.get("/api/settings").status_code == 401
-    paired1 = first.post(
-        "/api/auth/pair",
-        json={"code": auth.pairing_code_for_host(), "device_name": "Phone"},
-    )
-    assert paired1.status_code == 200
-    csrf1 = paired1.json()["csrf_token"]
-    session1 = paired1.json()["session"]["id"]
-    assert first.get("/api/settings").status_code == 200
-    assert first.post("/api/settings", json={"AUTOMATIC_MUTING_ENABLED": False}).status_code == 403
-    assert first.post(
-        "/api/settings",
-        json={"AUTOMATIC_MUTING_ENABLED": False},
-        headers={"X-CSRF-Token": csrf1},
+    assert client.get("/api/settings").status_code == 200
+    assert client.post(
+        "/api/settings", json={"AUTOMATIC_MUTING_ENABLED": False}
     ).status_code == 200
-
-    paired2 = second.post(
-        "/api/auth/pair",
-        json={"code": auth.pairing_code_for_host(), "device_name": "Tablet"},
-    )
-    csrf2 = paired2.json()["csrf_token"]
-    assert second.post(
-        "/api/settings",
-        json={"AUTOMATIC_MUTING_ENABLED": True},
-        headers={"X-CSRF-Token": csrf2},
-    ).status_code == 200
-    assert auth.revoke(session1)
-    assert first.get("/api/settings").status_code == 401
-    assert second.get("/api/settings").status_code == 200
+    assert client.get("/api/auth/status").status_code == 404
+    assert server._is_local_network_client("127.0.0.1")
+    assert server._is_local_network_client("192.168.1.25")
+    assert server._is_local_network_client("10.20.30.40")
+    assert not server._is_local_network_client("8.8.8.8")
 
 
 def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
@@ -171,6 +104,9 @@ def test_dashboard_mobile_navigation_touch_calibration_and_pwa_files_exist():
     assert "min-height:44px" in html
     assert manifest["display"] == "standalone"
     assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+    assert 'id="pair-modal"' not in html
+    assert "csrfToken" not in html
+    assert "no Clicker pairing code or dashboard login" in html
 
 
 def test_help_page_documents_legacy_training_and_safety_workflows():
@@ -187,7 +123,46 @@ def test_help_page_documents_legacy_training_and_safety_workflows():
     assert "Shadow mode" in html
     assert "Flagging ad labels and countdowns" in html
     assert "A timer alone is ignored" in html
+    assert "Streaming shows without a logo" in html
+    assert "What the Program and Commercial markers do" in html
+    assert "One timestamped correction" in html
+    assert "continuous window" in html
     assert 'href="/"' in html
+
+
+def test_dashboard_clarifies_quick_corrections_and_no_logo_profiles():
+    html = (Path(__file__).parents[1] / "dashboard.html").read_text()
+    assert 'id="quick-label-help"' in html
+    assert "save one timestamped evidence snapshot" in html
+    assert "do not immediately change detector state" in html
+    assert "click once to start and again to stop" in html
+    assert "Streaming show with no persistent logo?" in html
+    assert "visual scores remain available to diagnostics and ML features" in html
+    assert 'id="preview-capture"' in html
+    assert "Older profile — source not recorded" in html
+
+
+def test_full_frame_diagnostics_support_no_logo_profile_regions():
+    full_frame_color = SimpleNamespace(_mode="color", _roi_rect=None, corner="color")
+    custom_color = SimpleNamespace(
+        _mode="color", _roi_rect=(100, 50, 300, 200), corner="color"
+    )
+    combo = SimpleNamespace(
+        _mode="combo", _roi_rect=(1500, 20, 300, 120), corner="custom"
+    )
+
+    assert server._active_roi_annotation(full_frame_color, 1920, 1080) == (
+        (0, 0, 1919, 1079),
+        "color full frame",
+    )
+    assert server._active_roi_annotation(custom_color, 1920, 1080) == (
+        (100, 50, 399, 249),
+        "color",
+    )
+    assert server._active_roi_annotation(combo, 1920, 1080) == (
+        (1500, 20, 1799, 139),
+        "combo logo",
+    )
 
 
 def test_dashboard_exposes_safe_ad_overlay_settings_and_diagnostics():

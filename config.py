@@ -28,20 +28,11 @@ APPLE_TV_ID = os.environ.get("APPLE_TV_ID", "YOUR_APPLE_TV_ID")
 # ---------------------------------------------------------------------------
 # Dashboard and LAN access
 # ---------------------------------------------------------------------------
-# Localhost is deliberately the safe default. Set CLICKER_HOST=0.0.0.0 to
-# expose the dashboard to the LAN; doing so automatically enables pairing.
-DASHBOARD_HOST = os.environ.get("CLICKER_HOST", "127.0.0.1").strip()
+# The dashboard is a direct-access LAN tool. The server additionally rejects
+# clients whose peer address is not loopback, private, or link-local. Do not
+# forward this port to the public internet.
+DASHBOARD_HOST = os.environ.get("CLICKER_HOST", "0.0.0.0").strip()
 DASHBOARD_PORT = int(os.environ.get("CLICKER_PORT", "8080"))
-DASHBOARD_AUTH_ENABLED = _env_bool(
-    "CLICKER_AUTH_ENABLED", DASHBOARD_HOST not in {"127.0.0.1", "::1", "localhost"}
-)
-DASHBOARD_SESSION_IDLE_SECONDS = int(os.environ.get("CLICKER_SESSION_IDLE_SECONDS", "1800"))
-DASHBOARD_SESSION_ABSOLUTE_SECONDS = int(os.environ.get("CLICKER_SESSION_ABSOLUTE_SECONDS", "28800"))
-DASHBOARD_AUTH_DB_PATH = os.environ.get(
-    "CLICKER_AUTH_DB_PATH",
-    str(pathlib.Path(__file__).parent / "data" / "dashboard_auth.sqlite3"),
-)
-DASHBOARD_PAIRING_CODE_TTL_SECONDS = 600
 
 # ---------------------------------------------------------------------------
 # Volume control

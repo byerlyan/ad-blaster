@@ -1,6 +1,12 @@
 import sys
+import inspect
+import json
 from types import SimpleNamespace
 
+import numpy as np
+import pytest
+
+import calibrate
 import capture
 
 
@@ -122,3 +128,47 @@ def test_explicit_macos_index_is_not_remapped_and_non_1080p_is_accepted(monkeypa
 
     assert cap._device == 2
     cap.close()
+
+
+def test_default_macos_capture_never_falls_back_to_facetime_index(monkeypatch):
+    monkeypatch.setattr(capture.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(capture.config, "CAPTURE_DEVICE", 0)
+    monkeypatch.setattr(capture.config, "CAPTURE_DEVICE_NAME", "Missing HDMI card")
+    monkeypatch.setattr(capture, "_find_capture_card_index", lambda: None)
+    monkeypatch.setattr(
+        capture.cv2,
+        "VideoCapture",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("an unselected numeric camera must never be opened")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="numeric fallback is disabled"):
+        capture.FrameCapture().open()
+
+
+def test_calibration_resolves_the_selected_capture_device_at_call_time(monkeypatch):
+    for function in (
+        calibrate.calibrate,
+        calibrate.calibrate_roi,
+        calibrate.calibrate_combo,
+        calibrate.calibrate_color,
+    ):
+        assert inspect.signature(function).parameters["device"].default is None
+
+    monkeypatch.setattr(calibrate.os, "uname", lambda: SimpleNamespace(sysname="Darwin"))
+    monkeypatch.setattr(calibrate.config, "CAPTURE_DEVICE_NAME", "Guermok USB3 Video")
+    assert calibrate._capture_source_label() == "Guermok USB3 Video"
+
+
+def test_color_profile_records_its_capture_source(tmp_path):
+    calibrate.save_color_profile(
+        "streaming",
+        np.ones((2, 2), dtype=np.float32),
+        np.zeros((8, 8, 3), dtype=np.uint8),
+        profiles_dir=str(tmp_path),
+        capture_source="Guermok USB3 Video",
+    )
+
+    metadata = json.loads((tmp_path / "streaming.json").read_text())
+    assert metadata["capture_source"] == "Guermok USB3 Video"

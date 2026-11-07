@@ -240,7 +240,14 @@ class Engine:
                 commercial_enter_threshold=config.HYBRID_COMMERCIAL_ENTER_THRESHOLD,
                 program_exit_threshold=config.HYBRID_PROGRAM_EXIT_THRESHOLD,
                 detector_weights={
-                    "legacy_visual": config.HYBRID_LEGACY_VISUAL_WEIGHT,
+                    # A disabled visual signal is still evaluated so the ML
+                    # feature vector and diagnostics remain consistent; zero
+                    # weight removes it from the fused decision.
+                    "legacy_visual": (
+                        config.HYBRID_LEGACY_VISUAL_WEIGHT
+                        if config.HYBRID_LEGACY_VISUAL_ENABLED
+                        else 0.0
+                    ),
                     "audio_transition": config.HYBRID_AUDIO_TRANSITION_WEIGHT,
                     "audio_fingerprint": config.HYBRID_FINGERPRINT_WEIGHT,
                     "ad_overlay": config.HYBRID_AD_OVERLAY_WEIGHT,
@@ -300,11 +307,9 @@ class Engine:
             detectors=detectors,
             fusion=FusionEngine(policy),
             enabled={
-                "legacy_visual": (
-                    True
-                    if self._detection_mode == "legacy"
-                    else config.HYBRID_LEGACY_VISUAL_ENABLED
-                ),
+                # Always evaluate visual features. In Hybrid, the policy
+                # weight above controls whether they influence fusion.
+                "legacy_visual": True,
                 "audio_transition": config.AUDIO_TRANSITION_ENABLED,
                 "audio_fingerprint": config.AUDIO_FINGERPRINT_ENABLED,
                 "ad_overlay": config.AD_OVERLAY_ENABLED,

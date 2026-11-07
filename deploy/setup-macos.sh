@@ -12,8 +12,8 @@ usage() {
 Usage: bash deploy/setup-macos.sh [options]
 
 Options:
-  --lan          Listen on the home LAN (0.0.0.0); pairing auth is automatic.
-  --local-only   Listen only on 127.0.0.1 (safe default).
+  --lan          Listen on the home LAN (0.0.0.0); this is the default.
+  --local-only   Listen only on 127.0.0.1.
   --no-start     Install/update files and LaunchAgent without starting it.
   --help         Show this help.
 
@@ -24,7 +24,7 @@ Environment overrides:
 EOF
 }
 
-BIND_MODE="ask"
+BIND_MODE="lan"
 START_AGENT="true"
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -170,7 +170,7 @@ echo "[3/6] Copying application files (runtime data is preserved)..."
 APP_FILES=(
     server.py engine.py capture.py detector.py detection_pipeline.py audio.py ad_overlay.py
     fingerprint.py ml.py evaluation.py calibrate.py config.py intervention.py
-    pair.py corrections.py dashboard_auth.py device_setup.py dashboard.html help.html
+    pair.py corrections.py device_setup.py dashboard.html help.html
     manifest.webmanifest clicker-icon.svg clicker-icon-192.png clicker-icon-512.png
     requirements.txt requirements-intel-macos.txt requirements-dev.txt
     requirements-ml.txt requirements-browser.txt
@@ -226,15 +226,6 @@ if [ "$PACKAGE_MANAGER" = "macports" ]; then
     fi
 fi
 
-if [ "$BIND_MODE" = "ask" ]; then
-    BIND_MODE="local"
-    if [ -t 0 ]; then
-        read -r -p "Expose the dashboard to paired devices on your home LAN? [y/N] " ENABLE_LAN
-        if [[ "$ENABLE_LAN" =~ ^[Yy]$ ]]; then
-            BIND_MODE="lan"
-        fi
-    fi
-fi
 if [ "$BIND_MODE" = "lan" ]; then
     BIND_HOST="0.0.0.0"
 else
@@ -325,7 +316,7 @@ echo "Install directory: $INSTALL_DIR"
 echo "Local dashboard:  http://127.0.0.1:$CLICKER_PORT_VALUE"
 if [ -n "$LAN_ADDRESS" ]; then
     echo "LAN dashboard:    http://$LAN_ADDRESS:$CLICKER_PORT_VALUE"
-    echo "Pairing code:     tail -f \"$LOG_DIR/clicker-error.log\""
+    echo "LAN access:       direct (no dashboard pairing code)"
 elif [ "$BIND_MODE" = "lan" ]; then
     echo "LAN mode is enabled; find this Mac's address in System Settings → Network."
 fi

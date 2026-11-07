@@ -24,6 +24,15 @@ from capture import FrameCapture, extract_corner_rois, is_sync_artifact_frame
 logger = logging.getLogger(__name__)
 
 
+def _capture_source_label(device=None) -> str:
+    """Describe the configured source without freezing a macOS camera index."""
+    if device is not None:
+        return str(device)
+    if os.uname().sysname == "Darwin":
+        return str(config.CAPTURE_DEVICE_NAME)
+    return str(config.CAPTURE_DEVICE)
+
+
 def _compute_edge_map(gray_roi: np.ndarray) -> np.ndarray:
     """Canny edge detection on a grayscale ROI. Returns binary edge map."""
     return cv2.Canny(gray_roi, config.CANNY_LOW, config.CANNY_HIGH)
@@ -180,6 +189,7 @@ def save_profile(
     scores: dict,
     profiles_dir: str = config.PROFILES_DIR,
     roi_rect: tuple | None = None,
+    capture_source: str | None = None,
 ):
     """Save a logo mode channel profile to disk.
 
@@ -218,6 +228,8 @@ def save_profile(
         "logo_match_threshold": config.LOGO_MATCH_THRESHOLD,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if capture_source:
+        metadata["capture_source"] = capture_source
     if last_used:
         metadata["last_used_at"] = last_used
     if roi_rect is not None:
@@ -243,6 +255,7 @@ def save_color_profile(
     preview_bgr: np.ndarray,
     roi_rect: tuple | None = None,
     profiles_dir: str = config.PROFILES_DIR,
+    capture_source: str | None = None,
 ):
     """Save a color mode channel profile.
 
@@ -277,6 +290,8 @@ def save_color_profile(
         "hist_bins": [config.COLOR_HIST_BINS_H, config.COLOR_HIST_BINS_S],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if capture_source:
+        metadata["capture_source"] = capture_source
     if last_used:
         metadata["last_used_at"] = last_used
     if roi_rect is not None:
@@ -380,7 +395,7 @@ def delete_profile(channel_name: str, profiles_dir: str = config.PROFILES_DIR):
 
 def calibrate(
     channel_name: str,
-    device=config.CAPTURE_DEVICE,
+    device=None,
     duration: float | None = None,
 ) -> str:
     """Run the full calibration flow. Returns path to saved profile JSON."""
@@ -400,6 +415,7 @@ def calibrate(
         edge_profile=result["edge_profiles"][result["best_corner"]],
         template=result["templates"][result["best_corner"]],
         scores=result["scores"],
+        capture_source=_capture_source_label(device),
     )
 
     return path
@@ -408,7 +424,7 @@ def calibrate(
 def calibrate_roi(
     channel_name: str,
     x: int, y: int, w: int, h: int,
-    device=config.CAPTURE_DEVICE,
+    device=None,
     duration: float | None = None,
 ) -> str:
     """Calibrate using a user selected ROI rectangle. Returns path to profile JSON."""
@@ -450,6 +466,7 @@ def calibrate_roi(
         template=template,
         scores={"custom": score},
         roi_rect=(x, y, w, h),
+        capture_source=_capture_source_label(device),
     )
 
     return path
@@ -464,6 +481,7 @@ def save_combo_profile(
     preview_bgr: np.ndarray,
     score: float,
     profiles_dir: str = config.PROFILES_DIR,
+    capture_source: str | None = None,
 ):
     """Save a combo (logo + color) channel profile.
 
@@ -504,6 +522,8 @@ def save_combo_profile(
         "hist_bins": [config.COLOR_HIST_BINS_H, config.COLOR_HIST_BINS_S],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if capture_source:
+        metadata["capture_source"] = capture_source
     if last_used:
         metadata["last_used_at"] = last_used
 
@@ -521,7 +541,7 @@ def save_combo_profile(
 def calibrate_combo(
     channel_name: str,
     logo_rect: tuple,
-    device=config.CAPTURE_DEVICE,
+    device=None,
     duration: float | None = None,
 ) -> str:
     """Build a combined logo+color profile from a single 30s sample.
@@ -582,13 +602,14 @@ def calibrate_combo(
         histogram=avg_hist.astype(np.float32),
         preview_bgr=frames[-1],
         score=score,
+        capture_source=_capture_source_label(device),
     )
 
 
 def calibrate_color(
     channel_name: str,
     roi_rect: tuple | None = None,
-    device=config.CAPTURE_DEVICE,
+    device=None,
     duration: float | None = None,
 ) -> str:
     """Build a color signature profile by averaging HSV hue/saturation histograms over a sample.
@@ -635,6 +656,7 @@ def calibrate_color(
         histogram=avg_hist.astype(np.float32),
         preview_bgr=preview,
         roi_rect=roi_rect,
+        capture_source=_capture_source_label(device),
     )
 
 
@@ -660,8 +682,8 @@ def main():
     )
     parser.add_argument(
         "--device",
-        default=config.CAPTURE_DEVICE,
-        help=f"Capture device (default: {config.CAPTURE_DEVICE})",
+        default=None,
+        help="Capture device override (default: selected dashboard device)",
     )
     args = parser.parse_args()
 

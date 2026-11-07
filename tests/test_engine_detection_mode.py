@@ -132,3 +132,15 @@ def test_hybrid_status_serializes_ml_detector_status():
         "metadata": None,
     }
 
+
+def test_disabled_hybrid_visual_is_measured_but_has_zero_fusion_weight(monkeypatch):
+    monkeypatch.setattr("config.HYBRID_LEGACY_VISUAL_ENABLED", False)
+    engine = Engine()
+    engine._detection_mode = "hybrid"
+    engine._detector = object()
+
+    engine._build_detection_pipeline()
+
+    assert engine._pipeline._enabled["legacy_visual"] is True
+    assert engine._pipeline._fusion.policy.detector_weights["legacy_visual"] == 0.0
+

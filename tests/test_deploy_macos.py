@@ -35,6 +35,7 @@ def test_macos_installer_uses_user_launch_agent_and_preserves_runtime_state():
     assert '"CLICKER_HOST": bind_host' in script
     assert '"FFMPEG_BINARY": ffmpeg_bin' in script
     assert "dashboard.html help.html" in script
+    assert "dashboard_auth.py" not in script
     assert 'ffmpeg tesseract' in script
     assert "audio.py ad_overlay.py" in script
     assert '"TESSERACT_BINARY": tesseract_bin' in script
@@ -69,6 +70,7 @@ def test_intel_installer_is_homebrew_free_and_uses_native_macports_packages():
     assert "opencv-python" not in requirements
     assert "pyobjc-framework" not in requirements.lower()
     assert "fastapi>=0.110" in requirements
+    assert "no dashboard pairing code" in common
 
 
 def test_appletv_srp_dependency_is_pinned_below_breaking_release():

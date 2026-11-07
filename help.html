@@ -120,6 +120,8 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
     <p class="toc-label">On this page</p>
     <a href="#quick-start">Quick start</a>
     <a href="#legacy">Legacy system</a>
+    <a href="#streaming">Streaming / no logo</a>
+    <a href="#labels">Labels and markers</a>
     <a href="#training">Train the model</a>
     <a href="#fingerprints">Trusted ads</a>
     <a href="#ad-overlays">Ad overlays</a>
@@ -171,6 +173,39 @@ p code, li code, td code { padding:2px 5px; border-radius:4px; background:var(--
         <li>If it enters too easily, use <strong>Conservative</strong> or increase debounce. If it misses too much, try Balanced before changing individual thresholds.</li>
         <li>Use <strong>Disarm</strong> immediately if a live session controls volume incorrectly; this also starts the manual-override cooldown.</li>
       </ol>
+    </section>
+
+    <section id="streaming">
+      <p class="eyebrow">No persistent channel bug</p>
+      <h2>Streaming shows without a logo</h2>
+      <p class="section-intro">A missing logo is not commercial evidence by itself. Streaming episodes often fill the whole frame, so Logo mode has no stable program signal and should not be forced to behave like one.</p>
+      <div class="grid">
+        <article class="card"><span class="label">Legacy</span><h3>Use Color only when it separates</h3><p>Create a separate Color profile for the service, show, or player layout. Prefer a small ROI only if it stays visually consistent during the program and changes during ads; otherwise use the full frame. Collect several Content and Commercial windows and use Suggest. If the reported distributions overlap heavily, Legacy visual detection is not reliable for that source.</p></article>
+        <article class="card"><span class="label">Hybrid</span><h3>Fuse independent streaming cues</h3><p>Enable explicit ad-label/countdown OCR, audio transitions, a model trained on multiple episodes and breaks, and trusted fingerprints for repeated ads. If the Color profile creates false commercial evidence, turn off Hybrid Visual so it cannot dilute the better signals.</p></article>
+      </div>
+      <h3>Recommended streaming recipe</h3>
+      <ol class="checklist">
+        <li>Create a <strong>Color Profile</strong>; do not create Logo or Combo unless a genuinely persistent program graphic exists.</li>
+        <li>Run Legacy in Shadow and collect multiple separate Content and Commercial windows. Apply a suggested Color threshold only if the score ranges separate clearly.</li>
+        <li>Switch to Hybrid, enable ad overlays and usable audio, and train ML from several episodes, menus, recaps, credits, and different ad breaks—not one adjacent run.</li>
+        <li>Enroll fingerprints only for confirmed ads that repeat. A trusted fingerprint can classify by itself; OCR, audio transitions, and ML normally corroborate one another.</li>
+        <li>If visual scores overlap, disable <strong>Hybrid Visual</strong>. Keep at least two useful corroborating sources available and validate complete breaks in Shadow mode.</li>
+      </ol>
+      <div class="callout"><strong>Legacy has a real limit here.</strong> If arbitrary show scenes and ads have the same visual score distribution, no threshold can separate them reliably. Hybrid evidence is the correct fallback, not a more aggressive Logo threshold.</div>
+    </section>
+
+    <section id="labels">
+      <p class="eyebrow">Two different labeling tools</p>
+      <h2>What the Program and Commercial markers do</h2>
+      <table class="mode-table">
+        <thead><tr><th>Control</th><th>What it records</th><th>What it changes</th></tr></thead>
+        <tbody>
+          <tr><td>This is a Program / Commercial</td><td>One timestamped correction with the current channel, Legacy/Hybrid decision, detector evidence, confidence scores, and available ML feature snapshot.</td><td>It adds an Activity audit entry only. It does not immediately change state, mute or unmute, tune thresholds, rebuild a profile, or retrain the model. Undo marks the correction as undone while preserving the audit history.</td></tr>
+          <tr><td>Mark Content / Commercial</td><td>A continuous window of frame and feature samples. Click once to start and again to stop; the edges are trimmed to forgive reaction time.</td><td>Those windows feed Suggest and the exported ML dataset. Stopping a Content window also rebuilds an active Color/Combo reference when enough samples exist. Suggested thresholds still require an explicit Apply.</td></tr>
+          <tr><td>Mute now / Unmute now</td><td>A manual intervention event.</td><td>It changes Apple TV volume; it does not create a Program or Commercial label.</td></tr>
+        </tbody>
+      </table>
+      <p class="callout"><strong>Which should you use?</strong> Tap “This is…” when reviewing a single wrong decision. Use Mark Content/Commercial when deliberately collecting training data from a clean stretch of playback.</p>
     </section>
 
     <section id="training">
@@ -254,6 +289,7 @@ python3 scripts/train_commercial_model.py \
       <p class="eyebrow">Common problems</p>
       <h2>Troubleshooting</h2>
       <details><summary>Legacy marks programming as a commercial</summary><p>Confirm the active profile matches the current channel, recalibrate during stable programming, and try Conservative sensitivity. Inspect the Current and Template images for crop or logo changes.</p></details>
+      <details><summary>The profile preview shows the FaceTime camera</summary><p>The preview is the saved image from when that profile was calibrated; it is not a live camera view. Select the HDMI capture card in the wizard or Settings, then overwrite the affected profile. Calibration uses the saved device name and will now stop instead of silently falling back to FaceTime.</p></details>
       <details><summary>The model stays unavailable or unknown</summary><p>Confirm <code>data/commercial_model.joblib</code> exists, restart the service, enable ML Classifier, and inspect Diagnostics for a schema or load error. Unknown is the expected safe state when a model cannot be used.</p></details>
       <details><summary>The trainer says there are not enough groups</summary><p>Record more separate Content and Commercial marking windows. You need both labels and at least four distinct session/source groups; many adjacent rows from one window still count as one group.</p></details>
       <details><summary>Hybrid has no audio evidence</summary><p>Use Diagnostics to verify the configured audio input. On macOS, a capture card may expose video under one device name and audio under another. Legacy visual detection can continue without audio.</p></details>

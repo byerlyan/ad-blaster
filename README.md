@@ -72,7 +72,7 @@ Works on any Debian family system with systemd. A **Raspberry Pi** (Raspberry Pi
    cd /opt/the-clicker
    sudo bash deploy/setup.sh
    ```
-   It installs dependencies into a venv, installs a `the-clicker` systemd service (starts on boot), and sanity checks the capture device. The installer asks whether to expose the dashboard to trusted devices on your home LAN. The safe default is local-only on `127.0.0.1:8080`.
+   It installs dependencies into a venv, installs a `the-clicker` systemd service (starts on boot), sanity checks the capture device, and exposes the dashboard directly to private-LAN clients.
 
 > Prefer to skip systemd and run it by hand? `pip install -r requirements.txt` then `python3 server.py`. Pairing, calibration, and the dashboard are identical.
 
@@ -93,11 +93,11 @@ cd the-clicker
 bash deploy/setup-macos.sh
 ```
 
-The safe default listens only on `127.0.0.1:8080`. For paired phone/tablet
-access on your home network, either answer yes at the prompt or use:
+The installer listens on the private LAN by default, with no dashboard pairing
+code. To restrict it to the Mac itself instead, use:
 
 ```bash
-bash deploy/setup-macos.sh --lan
+bash deploy/setup-macos.sh --local-only
 ```
 
 Useful noninteractive options are `--local-only`, `--lan`, and `--no-start`.
@@ -120,7 +120,7 @@ cd the-clicker
 bash deploy/setup-macos-intel.sh
 ```
 
-Use `--lan`, `--local-only`, or `--no-start` in the same way as the standard
+LAN access is the default. Use `--local-only`, `--lan`, or `--no-start` in the same way as the standard
 installer. The Intel path uses a separate `venv-macports` environment, so it
 does not overwrite an existing Homebrew environment. The script itself runs as
 your user and requests `sudo` only when MacPorts installs or updates packages.
@@ -131,7 +131,7 @@ launchctl print gui/$(id -u)/com.theclicker.app
 launchctl kickstart -k gui/$(id -u)/com.theclicker.app
 launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.theclicker.app.plist"
 
-# Follow logs (the LAN pairing code is written here)
+# Follow logs
 tail -f "$HOME/Library/Logs/The Clicker/clicker.log" \
   "$HOME/Library/Logs/The Clicker/clicker-error.log"
 ```
@@ -191,7 +191,7 @@ The software needs to learn where each channel's logo sits, and build a color pr
 5. Name it and **Save**. Three profile types:
    - **Logo profile**: edge + template match on the boxed logo. Best when the logo is crisp.
    - **Color profile**: matches the overall color signature; no box needed. Good when there's no clean logo but the ad break looks visually distinct.
-   - **Combo**: both (logo box + full frame color). Most reliable.
+   - **Combo**: both (logo box + full frame color). Useful when a real persistent logo exists; it is not appropriate for a logo-free streaming show.
 
 Theoretically you should only need to do this once per channel, but I've gotten better results by setting up a new profile for each game because while the network logo may remain the same between games, the colors of jerseys change the color profile.
 
@@ -204,7 +204,7 @@ Theoretically you should only need to do this once per channel, but I've gotten 
   - **Activity**: detector decisions, actions, reasons, and saved corrections.
   - **Calibration**: profile diagnostics, capture check, touch ROI selection, resize handles, pinch zoom, and numeric coordinates.
   - **Settings**: Basic by default (mode, sensitivity, automatic muting, shadow preference, profile/devices); Advanced exposes detector, subsystem, fusion, intervention, and safety controls.
-  - **Diagnostics**: detector health, LAN address/QR, and revocable trusted-device sessions.
+  - **Diagnostics**: detector health and the direct-access private-LAN address/QR.
 - **Start** picks up the selected channel's profile and begins. **Shadow** mode detects without touching the TV (great for testing).
 - Live vs delayed is detected automatically: **live → mute**, **delayed → skip forward**.
 - On the first visit, a six-step wizard walks through capture, Apple TV pairing, detection mode, calibration, shadow validation, and enabling automatic control.
@@ -219,17 +219,21 @@ One click picks how eager the system is to call something a commercial:
 ### Dialing it in
 If detection is shaky on a channel, switch Settings to **Advanced**, then use **Mark Content / Mark Commercial**: press start/stop through a stretch of show and of ads, then hit **Suggest** to get data driven threshold values. This is the fastest way to make a flaky channel reliable.
 
+For a streaming show with no persistent logo, start with a **Color profile** and collect several separate program/ad windows. If the Color score ranges overlap, visual Legacy detection cannot separate that source reliably: use Hybrid, disable **Hybrid Visual**, and combine explicit ad-overlay OCR, usable audio transitions, a model trained across multiple episodes/breaks, and trusted fingerprints for confirmed repeating ads.
+
+The Home buttons **This is a Program** and **This is a Commercial** save one timestamped correction and its current detector evidence to Activity. They do not change state, volume, thresholds, the active profile, or the trained model. For threshold tuning and ML training, use the continuous **Mark Content / Mark Commercial** windows in Settings instead.
+
 ### LAN and phone access
 
-The server binds to localhost by default. To opt into home-LAN access, set `CLICKER_HOST=0.0.0.0` (the installer can do this for its systemd service):
+The server binds to `0.0.0.0` by default so phones and computers on the private LAN can open it directly:
 
 ```bash
 CLICKER_HOST=0.0.0.0 python3 server.py
 ```
 
-LAN mode automatically enables authentication. Open the LAN URL shown under **Diagnostics**, enter the rotating one-time code printed in the host log, and name the device. The session is stored in an HttpOnly, SameSite cookie; state-changing requests also require a per-session CSRF token. Sessions have server-enforced idle and absolute expiration and can be revoked individually. Pairing attempts are rate limited. Do not forward port 8080 to the public internet; this is designed for a trusted home network.
+There is no Clicker pairing code or dashboard login. The server accepts loopback, private, and link-local client addresses and rejects public-address clients. Anyone on the trusted LAN can control the app, so do not forward port 8080 to the public internet or place it on an untrusted network.
 
-The Diagnostics QR opens the local URL. After pairing, use Safari or Chrome's **Add to Home Screen** command for a standalone PWA-style launcher. Offline control is intentionally not cached because stale device commands are unsafe.
+The Diagnostics QR opens the LAN URL. Use Safari or Chrome's **Add to Home Screen** command for a standalone PWA-style launcher. Offline control is intentionally not cached because stale device commands are unsafe.
 
 ---
 
@@ -237,6 +241,7 @@ The Diagnostics QR opens the local URL. After pairing, use Safari or Chrome's **
 
 | Symptom | Likely cause / fix |
 |---|---|
+| **Profile preview shows the FaceTime camera** | The preview is a saved calibration frame, not a live feed. Select the HDMI card in the wizard or Settings, then overwrite/recreate that profile. Calibration now resolves the saved macOS device name and refuses unsafe numeric fallback. |
 | **Intel macOS reports no video inputs** | Pull the latest code and rerun `bash deploy/setup-macos-intel.sh`. On Monterey, allow The Clicker's MacPorts Python process under **System Preferences → Security & Privacy → Privacy → Camera**, then restart the LaunchAgent. Monterey uses the older external-camera API, which this path handles automatically. |
 | **Capture is black / blank** | HDCP on the HDMI feed, or capture card not seated in a USB 3.0 port. |
 | **"Permission denied" / `/dev/video0` won't open** | Pi / bare metal: run the service as root (the installer's default) or add your user to the `video` group. Proxmox LXC: apply the host udev rule. |
@@ -262,7 +267,6 @@ journalctl -u the-clicker -f      # live logs. STATE CHANGE lines show detection
 | `server.py` | FastAPI web server: dashboard, API, presets, calibration endpoints |
 | `dashboard.html` | The single page dashboard UI |
 | `help.html` | In-app Legacy, model-training, trusted-ad, and evaluation guide |
-| `dashboard_auth.py` | Pairing codes, hashed server-side sessions, expiry, CSRF, and revocation |
 | `corrections.py` | Durable one-tap labels with evidence, deduplication, undo, and relabeling |
 | `device_setup.py` | Capture enumeration and dashboard Apple TV discovery/pairing |
 | `engine.py` | The control loop: capture → detect → mute/skip; session state and tuning |

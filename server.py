@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import ipaddress
 import json
 import logging
 import os
@@ -27,7 +28,6 @@ import config
 from calibrate import delete_profile
 from capture import FrameCapture
 from corrections import CorrectionStore
-from dashboard_auth import DashboardAuth, SESSION_COOKIE
 from device_setup import (
     AppleTVPairingError,
     AppleTVSetup,
@@ -39,13 +39,6 @@ logger = logging.getLogger(__name__)
 
 engine = Engine()
 corrections = CorrectionStore(config.CORRECTIONS_DB_PATH)
-dashboard_auth = DashboardAuth(
-    config.DASHBOARD_AUTH_DB_PATH,
-    enabled=config.DASHBOARD_AUTH_ENABLED,
-    idle_seconds=config.DASHBOARD_SESSION_IDLE_SECONDS,
-    absolute_seconds=config.DASHBOARD_SESSION_ABSOLUTE_SECONDS,
-    pairing_ttl_seconds=config.DASHBOARD_PAIRING_CODE_TTL_SECONDS,
-)
 apple_tv_setup = AppleTVSetup(os.path.join(os.path.dirname(__file__), "credentials.json"))
 
 
@@ -62,39 +55,27 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="The Clicker", lifespan=lifespan)
 
 
-def _is_loopback(host: str | None) -> bool:
-    return (host or "").split("%", 1)[0] in {"127.0.0.1", "::1", "localhost"}
+def _is_local_network_client(host: str | None) -> bool:
+    """Allow direct use only from loopback, private, or link-local clients."""
+    normalized = (host or "").split("%", 1)[0]
+    if "pytest" in sys.modules and normalized in {"testclient", "testserver"}:
+        return True
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local
 
 
 @app.middleware("http")
 async def protect_lan_dashboard(request: Request, call_next):
-    """Require trusted sessions for LAN API access and CSRF on mutations."""
-    if not dashboard_auth.enabled:
-        request_host = request.headers.get("host", "").rsplit(":", 1)[0].strip("[]")
-        allowed = _is_loopback(request_host) or ("pytest" in sys.modules and request_host == "testserver")
-        if not allowed:
-            return JSONResponse({"detail": "Invalid host for localhost-only dashboard"}, status_code=400)
-        return await call_next(request)
-    if _is_loopback(request.client.host if request.client else None):
-        return await call_next(request)
-    path = request.url.path
-    public = path in {
-        "/",
-        "/manifest.webmanifest",
-        "/clicker-icon.svg",
-        "/api/auth/status",
-        "/api/auth/pair",
-    }
-    if public or request.method == "OPTIONS" or not path.startswith("/api/"):
-        return await call_next(request)
-    token = request.cookies.get(SESSION_COOKIE)
-    session = dashboard_auth.authenticate(token)
-    if session is None:
-        return JSONResponse({"detail": "Pair this device to use the LAN dashboard"}, status_code=401)
-    request.state.dashboard_session = session
-    if request.method not in {"GET", "HEAD", "OPTIONS"}:
-        if not dashboard_auth.csrf_valid(session, request.headers.get("X-CSRF-Token")):
-            return JSONResponse({"detail": "Invalid or missing CSRF token"}, status_code=403)
+    """Permit direct access from the local machine and private LAN only."""
+    client_host = request.client.host if request.client else None
+    if not _is_local_network_client(client_host):
+        return JSONResponse(
+            {"detail": "The Clicker is available only from the local network"},
+            status_code=403,
+        )
     return await call_next(request)
 
 
@@ -114,77 +95,6 @@ async def dashboard_security_headers(request: Request, call_next):
         "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     )
     return response
-
-
-class PairDashboardRequest(BaseModel):
-    code: str
-    device_name: str = "Browser"
-
-
-@app.get("/api/auth/status")
-async def auth_status(request: Request):
-    if not dashboard_auth.enabled or _is_loopback(request.client.host if request.client else None):
-        return {"required": False, "authenticated": True, "csrf_token": None}
-    token = request.cookies.get(SESSION_COOKIE)
-    session = dashboard_auth.authenticate(token)
-    return {
-        "required": True,
-        "authenticated": session is not None,
-        "csrf_token": dashboard_auth.csrf_for_token(token) if session else None,
-        "session": (
-            {
-                "id": session["id"],
-                "device_name": session["device_name"],
-                "expires_at": session["expires_at"],
-            }
-            if session
-            else None
-        ),
-    }
-
-
-@app.post("/api/auth/pair")
-async def pair_dashboard(req: PairDashboardRequest, request: Request, response: Response):
-    if not dashboard_auth.enabled:
-        return {"ok": True, "required": False, "csrf_token": None}
-    try:
-        token, csrf, session = dashboard_auth.pair(req.code, req.device_name)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=config.DASHBOARD_SESSION_ABSOLUTE_SECONDS,
-        httponly=True,
-        secure=request.url.scheme == "https",
-        samesite="strict",
-        path="/",
-    )
-    response.headers["Cache-Control"] = "no-store"
-    return {"ok": True, "required": True, "csrf_token": csrf, "session": session}
-
-
-@app.get("/api/auth/host-code")
-async def pairing_code(request: Request):
-    if not _is_loopback(request.client.host if request.client else None):
-        raise HTTPException(status_code=404, detail="Not found")
-    return {
-        "enabled": dashboard_auth.enabled,
-        "code": dashboard_auth.pairing_code_for_host() if dashboard_auth.enabled else None,
-    }
-
-
-@app.get("/api/auth/devices")
-async def trusted_devices():
-    return {"devices": dashboard_auth.trusted_devices()}
-
-
-@app.delete("/api/auth/devices/{session_id}")
-async def revoke_device(session_id: str, response: Response):
-    if not dashboard_auth.revoke(session_id):
-        raise HTTPException(status_code=404, detail="Trusted device not found")
-    response.headers["Cache-Control"] = "no-store"
-    return {"ok": True}
 
 
 # ------------------------------------------------------------------
@@ -1243,9 +1153,44 @@ async def calibrate_combo_endpoint(req: ComboCalibrateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _active_roi_annotation(detector, frame_width: int, frame_height: int):
+    """Resolve a safe diagnostic rectangle for logo, color, and combo profiles."""
+    mode = getattr(detector, "_mode", "logo")
+    roi_rect = getattr(detector, "_roi_rect", None)
+    if mode in {"color", "combo"} and roi_rect is not None:
+        x, y, width, height = (int(value) for value in roi_rect)
+        x1 = max(0, min(frame_width - 1, x))
+        y1 = max(0, min(frame_height - 1, y))
+        x2 = max(x1, min(frame_width - 1, x + max(1, width) - 1))
+        y2 = max(y1, min(frame_height - 1, y + max(1, height) - 1))
+        label = "color" if mode == "color" else "combo logo"
+        return (x1, y1, x2, y2), label
+
+    if mode == "color":
+        return (0, 0, frame_width - 1, frame_height - 1), "color full frame"
+
+    roi_w = min(config.CORNER_ROI_WIDTH, frame_width)
+    roi_h = min(config.CORNER_ROI_HEIGHT, frame_height)
+    corner = getattr(detector, "corner", "unknown")
+    corners = {
+        "top_left": (0, 0, roi_w - 1, roi_h - 1),
+        "top_right": (frame_width - roi_w, 0, frame_width - 1, roi_h - 1),
+        "bottom_left": (0, frame_height - roi_h, roi_w - 1, frame_height - 1),
+        "bottom_right": (
+            frame_width - roi_w,
+            frame_height - roi_h,
+            frame_width - 1,
+            frame_height - 1,
+        ),
+    }
+    return corners.get(
+        corner, (0, 0, frame_width - 1, frame_height - 1)
+    ), str(corner)
+
+
 @app.get("/api/frame")
 async def get_full_frame():
-    """Return the latest full frame with the active ROI corner highlighted.
+    """Return the latest full frame with the active profile region highlighted.
 
     Used for the diagnostics view so you can see where on screen the
     detector is looking.
@@ -1257,28 +1202,20 @@ async def get_full_frame():
     if frame is None:
         raise HTTPException(status_code=500, detail="Failed to grab frame")
 
-    # Draw a rectangle around the active ROI corner
+    # Draw the actual signal region. Color profiles can use a custom rectangle
+    # or the full frame; combo profiles display their logo rectangle.
     h, w = frame.shape[:2]
-    roi_w, roi_h = config.CORNER_ROI_WIDTH, config.CORNER_ROI_HEIGHT
-    corner = engine._detector.corner
-
-    corners = {
-        "top_left": (0, 0, roi_w, roi_h),
-        "top_right": (w - roi_w, 0, w, roi_h),
-        "bottom_left": (0, h - roi_h, roi_w, h),
-        "bottom_right": (w - roi_w, h - roi_h, w, h),
-    }
-    x1, y1, x2, y2 = corners[corner]
+    (x1, y1, x2, y2), region_label = _active_roi_annotation(
+        engine._detector, w, h
+    )
     annotated = frame.copy()
     cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 3)
 
     # Position text label inside the ROI to avoid clipping off screen
-    is_top = corner.startswith("top")
-    is_right = corner.endswith("right")
-    text_x = x1 + 5 if not is_right else x1 + 5
-    text_y = y2 - 10 if is_top else y1 + 20
+    text_x = x1 + 5
+    text_y = y1 + 20 if y1 + 20 < h else max(15, y2 - 10)
     cv2.putText(
-        annotated, f"ROI: {corner}", (text_x, text_y),
+        annotated, f"ROI: {region_label}", (text_x, text_y),
         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
     )
 
@@ -1288,7 +1225,7 @@ async def get_full_frame():
     _, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 70])
     b64 = base64.b64encode(buf.tobytes()).decode("ascii")
 
-    return {"frame_b64": b64, "corner": corner}
+    return {"frame_b64": b64, "corner": region_label}
 
 
 def _lan_address() -> str:
@@ -1312,7 +1249,7 @@ async def network_info():
         "bind_host": config.DASHBOARD_HOST,
         "port": config.DASHBOARD_PORT,
         "lan_enabled": config.DASHBOARD_HOST not in {"127.0.0.1", "::1", "localhost"},
-        "auth_required": dashboard_auth.enabled,
+        "access": "lan_direct",
         "address": address,
         "url": f"http://{address}:{config.DASHBOARD_PORT}/",
         "enable_hint": f"CLICKER_HOST=0.0.0.0 CLICKER_PORT={config.DASHBOARD_PORT} python3 server.py",
@@ -1356,17 +1293,6 @@ async def save_setup_state(state: dict):
     with path.open("w") as handle:
         json.dump(allowed, handle, indent=2)
     return {"ok": True, **allowed}
-
-
-@app.post("/api/auth/logout")
-async def logout_dashboard(request: Request, response: Response):
-    token = request.cookies.get(SESSION_COOKIE)
-    session = dashboard_auth.authenticate(token, touch=False)
-    if session:
-        dashboard_auth.revoke(session["id"])
-    response.delete_cookie(SESSION_COOKIE, path="/")
-    response.headers["Cache-Control"] = "no-store"
-    return {"ok": True}
 
 
 # ------------------------------------------------------------------

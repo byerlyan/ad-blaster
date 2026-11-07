@@ -199,9 +199,10 @@ class FrameCapture:
             if idx is not None:
                 self._device = idx
             else:
-                logger.warning(
-                    "Could not find '%s', falling back to index %d",
-                    config.CAPTURE_DEVICE_NAME, self._device,
+                raise RuntimeError(
+                    f'Capture device "{config.CAPTURE_DEVICE_NAME}" was not found. '
+                    "Select the HDMI capture card in the setup wizard or Settings; "
+                    "numeric fallback is disabled so macOS cannot open FaceTime by mistake."
                 )
 
         logger.info("Opening capture device: %s", self._device)

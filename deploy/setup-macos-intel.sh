@@ -15,8 +15,8 @@ Prerequisite:
   https://www.macports.org/install.php
 
 Options:
-  --lan          Listen on the home LAN (0.0.0.0); pairing auth is automatic.
-  --local-only   Listen only on 127.0.0.1 (safe default).
+  --lan          Listen on the home LAN (0.0.0.0); this is the default.
+  --local-only   Listen only on 127.0.0.1.
   --no-start     Install/update files and LaunchAgent without starting it.
   --help         Show this help.
 
